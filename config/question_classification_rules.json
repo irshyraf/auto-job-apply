@@ -1,0 +1,288 @@
+{
+  "_meta": {
+    "name": "Question Classification Rules — Module 4 Configuration",
+    "version": "1.0",
+    "created": "2026-03-16",
+    "description": "Rules for classifying application form questions into Tiers 1-4 and routing them to the correct answer source. Also includes cover letter generation rules."
+  },
+
+  "classification_overview": {
+    "tier_1": {
+      "name": "Factual / Personal",
+      "description": "Questions with a single correct answer that comes directly from the candidate's personal data.",
+      "answer_source": "personal_data_vault.json — auto-filled, no AI needed",
+      "review_required": false,
+      "ai_needed": false,
+      "review_gate_display": "Greyed out (auto-approved). Visible but not demanding attention."
+    },
+    "tier_2": {
+      "name": "Common Screening",
+      "description": "Questions asked by nearly every employer, where the answer is the same regardless of role.",
+      "answer_source": "personal_data_vault.json > screening_answers_tier1 and screening_answers_tier2",
+      "review_required": false,
+      "ai_needed": false,
+      "review_gate_display": "Greyed out (auto-approved). Visible but not demanding attention."
+    },
+    "tier_3": {
+      "name": "Role-Specific",
+      "description": "Questions that require a tailored answer referencing the specific job or company.",
+      "answer_source": "AI-generated using Claude API. Inputs: CV, JD, company dossier, tone guide.",
+      "review_required": true,
+      "ai_needed": true,
+      "review_gate_display": "Highlighted — requires your approval before submission."
+    },
+    "tier_4": {
+      "name": "Competency / Scenario",
+      "description": "Behavioural or situational questions requiring a structured story from real experience.",
+      "answer_source": "AI-generated from answer_bank.json. Matches question to best STAR story, adapts language to role context.",
+      "review_required": true,
+      "ai_needed": true,
+      "review_gate_display": "Highlighted — requires your approval before submission."
+    }
+  },
+
+  "tier_1_rules": {
+    "_method": "Keyword matching against the patterns below. If the question text matches any pattern, auto-fill from the mapped vault field.",
+    "patterns": [
+      {
+        "keywords": ["right to work", "eligible to work", "legally entitled to work", "work authorisation", "work authorization", "authorised to work", "authorized to work", "permission to work"],
+        "vault_field": "screening_answers_tier1.right_to_work_uk",
+        "answer": "Yes",
+        "notes": "Always answer 'Yes'. Never elaborate on visa type or expiry. See vault._strategy."
+      },
+      {
+        "keywords": ["sponsorship", "require sponsorship", "need sponsorship", "visa sponsorship"],
+        "vault_field": "screening_answers_tier1.requires_sponsorship",
+        "answer": "No"
+      },
+      {
+        "keywords": ["notice period", "how soon can you start", "earliest start date", "availability to start", "when can you start", "start date"],
+        "vault_field": "screening_answers_tier1.notice_period",
+        "answer": "Immediately available"
+      },
+      {
+        "keywords": ["salary expectation", "salary requirement", "expected salary", "desired salary", "what salary", "minimum salary", "salary range"],
+        "vault_field": "screening_answers_tier1.salary_expectation_ideal",
+        "answer": "£30,000 - £40,000",
+        "notes": "Use ideal range, not minimum. If forced to give a single number, use £30,000."
+      },
+      {
+        "keywords": ["driving licence", "driving license", "driver's licence", "driver's license", "do you drive", "full driving", "valid driving"],
+        "vault_field": "screening_answers_tier1.driving_licence",
+        "answer": "No"
+      },
+      {
+        "keywords": ["willing to relocate", "open to relocation", "relocate for this role"],
+        "vault_field": "screening_answers_tier1.willing_to_relocate",
+        "answer": "London-based roles only. Open to all work setups — remote, hybrid, or office-based."
+      },
+      {
+        "keywords": ["full name", "legal name", "first name", "last name", "surname"],
+        "vault_field": "personal.full_name",
+        "answer": "Aafreen Fathima"
+      },
+      {
+        "keywords": ["email address", "email"],
+        "vault_field": "personal.email",
+        "answer": "aafreenfathimawork@gmail.com"
+      },
+      {
+        "keywords": ["phone number", "contact number", "telephone", "mobile number"],
+        "vault_field": "personal.phone",
+        "answer": "07442014272"
+      },
+      {
+        "keywords": ["address", "postcode", "post code", "zip code"],
+        "vault_field": "personal.address",
+        "answer": "48 Falconbrook Gardens, 15 Silvertown Way, E16 1JT"
+      },
+      {
+        "keywords": ["date of birth", "dob", "birthday"],
+        "vault_field": "personal.date_of_birth",
+        "answer": "04/09/1998",
+        "notes": "Check format required — some forms want DD/MM/YYYY, others MM/DD/YYYY."
+      },
+      {
+        "keywords": ["nationality", "what is your nationality", "country of citizenship"],
+        "vault_field": "personal.nationality",
+        "answer": "Indian"
+      },
+      {
+        "keywords": ["linkedin", "linkedin profile", "linkedin url"],
+        "vault_field": "links.linkedin",
+        "answer": "https://www.linkedin.com/in/aafreen-fathima-846870265"
+      },
+      {
+        "keywords": ["portfolio", "website", "personal website", "online portfolio"],
+        "vault_field": "links.portfolio",
+        "answer": "https://aafreenfathimacouk.wordpress.com/"
+      }
+    ],
+    "special_rules": [
+      {
+        "keywords": ["visa expiry", "visa expiration", "when does your visa expire", "visa end date"],
+        "action": "FLAG_FOR_MANUAL_REVIEW",
+        "reason": "Visa expiry date is never auto-filled. Route to Review Gate with a manual review flag.",
+        "vault_field": "right_to_work.visa_expiry"
+      },
+      {
+        "keywords": ["criminal record", "criminal conviction", "unspent conviction", "dbs check"],
+        "action": "AUTO_FILL",
+        "answer": "No",
+        "answer_variants": ["No", "No criminal record", "No unspent convictions", "None"],
+        "notes": "Select 'No' or the closest equivalent. If the field is a text box, answer 'No'."
+      },
+      {
+        "keywords": ["disability", "disabled", "reasonable adjustments", "health condition"],
+        "action": "AUTO_FILL",
+        "answer": "No",
+        "answer_variants": ["No", "No disability", "Does not apply", "None", "Prefer not to say"],
+        "notes": "Select 'No' or 'Does not apply'. If only 'Prefer not to say' is available, use that."
+      },
+      {
+        "keywords": ["gender", "sex", "pronoun", "ethnicity", "ethnic origin", "race", "religion", "sexual orientation", "marital status"],
+        "action": "AUTO_FILL",
+        "answer": "Prefer not to say",
+        "answer_variants": ["Prefer not to say", "Prefer not to disclose", "Rather not say"],
+        "notes": "Always select 'Prefer not to say' or closest equivalent. If not available and the field is required, select the most neutral option."
+      }
+    ]
+  },
+
+  "tier_2_rules": {
+    "_method": "Keyword matching. These are common screening questions where the answer is the same regardless of role.",
+    "patterns": [
+      {
+        "keywords": ["why are you looking", "reason for looking", "why are you seeking", "looking for a new role", "what motivated you to apply"],
+        "vault_field": "screening_answers_tier2.reason_for_looking",
+        "answer": "Seeking career growth and the opportunity to apply my marketing, business development, and commercial skills in a more dynamic environment."
+      },
+      {
+        "keywords": ["when are you available", "what is your availability", "available to start", "earliest availability"],
+        "vault_field": "screening_answers_tier2.availability",
+        "answer": "Immediately available to start"
+      },
+      {
+        "keywords": ["how did you hear", "where did you find", "how did you find out about", "referral source", "where did you see this"],
+        "vault_field": "screening_answers_tier2.how_did_you_hear",
+        "answer": "Found on [job board name]",
+        "notes": "Dynamically populate with the actual job board name (Indeed, LinkedIn, Reed, etc.) based on where the listing was scraped from."
+      },
+      {
+        "keywords": ["reason for leaving", "why did you leave", "why are you leaving your current role"],
+        "vault_field": "screening_answers_tier2.reason_for_leaving_last_role",
+        "answer": "Seeking career growth and a role that offers broader scope to develop my commercial and strategic skills."
+      }
+    ]
+  },
+
+  "tier_3_rules": {
+    "_method": "AI classification. If a question doesn't match any Tier 1 or Tier 2 pattern and is about the specific role or company, it's Tier 3.",
+    "trigger_patterns": [
+      "why do you want to work at [company]",
+      "what interests you about this role",
+      "what attracted you to this position",
+      "why [company name]",
+      "what do you know about us",
+      "what relevant experience do you have for this position",
+      "how does your experience relate to this role",
+      "why should we hire you",
+      "what can you bring to the team",
+      "what makes you a good fit"
+    ],
+    "answer_generation": {
+      "model": "claude-sonnet-4-20250514",
+      "max_tokens": 500,
+      "temperature": 0.4,
+      "inputs": ["tailored_cv", "job_description", "company_dossier", "tone_voice_guide"],
+      "system_prompt": "You are answering a role-specific application question for Aafreen Fathima. Write a concise, warm, and genuine answer that connects her real experience to the specific role and company. Use the candidate's CV, the job description, and the company dossier to write something specific — not generic. Follow the tone guide: warm, confident, grounded. Never aggressive or template-sounding. Keep to 100-200 words unless the form specifies a different limit. Never fabricate achievements or claim experience she doesn't have.",
+      "word_count_default": "100-200 words",
+      "word_count_short_field": "50-80 words (if the form field is small or has a low character limit)"
+    }
+  },
+
+  "tier_4_rules": {
+    "_method": "AI classification. Questions asking for a specific example, story, or situation from past experience.",
+    "trigger_patterns": [
+      "tell me about a time",
+      "give an example of when",
+      "describe a situation where",
+      "tell us about a time you",
+      "give an example of a time",
+      "describe a time when",
+      "can you describe a situation",
+      "share an experience where",
+      "provide an example of",
+      "what would you do if",
+      "how would you handle",
+      "how have you demonstrated"
+    ],
+    "answer_generation": {
+      "model": "claude-sonnet-4-20250514",
+      "max_tokens": 600,
+      "temperature": 0.3,
+      "inputs": ["answer_bank", "job_description", "tone_voice_guide"],
+      "system_prompt": "You are answering a competency question for Aafreen Fathima. You will receive her Answer Bank (a library of real STAR stories from her work history) and the job description. Your job is to: (1) select the most relevant story from the Answer Bank for this specific question, (2) adapt the language to fit the question wording and the role context, and (3) write a natural, flowing answer using the STAR framework but without making it feel mechanical. The answer should read like a genuine story told with warmth and clarity, not four labelled boxes. Follow the tone guide: warm, grounded, confident. Never invent experience. Never combine stories. Keep to 150-250 words unless the form specifies a different limit. Always base the answer on a real story from the Answer Bank.",
+      "story_selection_logic": "Match the question's competency theme against the competency_tags in each Answer Bank story. Pick the story with the strongest tag overlap. If multiple stories match equally, prefer the one from the most recent role (Caring Hearts > Welstand > Far Out).",
+      "word_count_default": "150-250 words"
+    }
+  },
+
+  "classification_pipeline": {
+    "_description": "The classifier runs in this order. It stops at the first match.",
+    "steps": [
+      {
+        "step": 1,
+        "action": "Check Tier 1 special rules. Visa expiry → flag for manual review. Criminal record → auto-fill 'No'. Disability → auto-fill 'No' or 'Does not apply'. Equality monitoring → auto-fill 'Prefer not to say'.",
+        "method": "Keyword matching"
+      },
+      {
+        "step": 2,
+        "action": "Check Tier 1 factual patterns. If matched, auto-fill from vault.",
+        "method": "Keyword matching"
+      },
+      {
+        "step": 3,
+        "action": "Check Tier 2 common screening patterns. If matched, auto-fill from vault.",
+        "method": "Keyword matching"
+      },
+      {
+        "step": 4,
+        "action": "Check for Tier 4 competency triggers. If the question asks for a specific example, story, or past situation, classify as Tier 4.",
+        "method": "Keyword matching on trigger_patterns, then AI confirmation if ambiguous"
+      },
+      {
+        "step": 5,
+        "action": "If none of the above matched, classify as Tier 3 (role-specific). Generate an AI answer using the JD and company dossier.",
+        "method": "Default fallback"
+      }
+    ],
+    "ambiguity_handling": "If a question could be Tier 2 or Tier 3, treat it as Tier 3 (the higher-quality path). Better to over-generate than to give a generic stock answer to something that deserved personalisation."
+  },
+
+  "cover_letter_rules": {
+    "when_to_generate": {
+      "no_cover_letter_field": "Skip entirely. Do not generate.",
+      "optional_cover_letter_field": "Generate and include in Review Gate for approval.",
+      "mandatory_cover_letter_upload": "Generate, render as PDF matching CV design, include in Review Gate.",
+      "why_do_you_want_to_work_here_field": "Treat as Tier 3 question, not a full cover letter. Generate 2-3 concise paragraphs."
+    },
+    "generation_config": {
+      "model": "claude-sonnet-4-20250514",
+      "max_tokens": 800,
+      "temperature": 0.4,
+      "inputs": ["tailored_cv", "job_description", "company_dossier", "tone_voice_guide"],
+      "system_prompt": "You are writing a cover letter for Aafreen Fathima. You will receive her tailored CV for this role, the job description, the company dossier, and her tone/voice guide. Follow the cover letter rules from the tone guide exactly: never open with 'I am writing to apply...'. Open with something specific about the company or role. Keep to 3-4 paragraphs, under 300 words. Structure: Paragraph 1 = hook (why this role/company caught her attention). Paragraph 2 = what she brings (most relevant experience with specific results). Paragraph 3 = why the fit makes sense. Paragraph 4 (optional) = warm, confident close. Tone: conversational but professional. Sound like a real person, not a template."
+    }
+  },
+
+  "form_field_type_handling": {
+    "_description": "Different form field types require different handling strategies.",
+    "text_input_short": "For single-line text fields: keep answer concise. If Tier 1/2, auto-fill directly. If Tier 3/4, use the short word count variant.",
+    "text_input_long": "For multi-line text areas: use full answer length. Check for character limits in the field attributes.",
+    "dropdown_select": "Match the best option from the dropdown values to the vault answer. If no exact match, flag for manual review.",
+    "radio_buttons": "Same as dropdown — match best option. Yes/No questions: match from vault.",
+    "checkbox": "Select applicable options. For 'select all that apply' questions, match against vault data.",
+    "file_upload": "If labelled as cover letter upload: generate and upload the PDF cover letter. If labelled as CV upload: upload the tailored CV PDF."
+  }
+}

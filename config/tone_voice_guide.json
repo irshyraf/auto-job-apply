@@ -1,0 +1,76 @@
+{
+  "voice_summary": "Warm, approachable, and grounded. Aafreen's natural voice flows \u2014 she tells stories with warmth and detail, connecting ideas in a way that feels like a genuine conversation. Her tone is professional but human \u2014 polished enough for a hiring manager, natural enough that it never sounds like a template. She is confident without being boastful, letting her results speak rather than overselling.",
+  "core_energy": "Warm and approachable. The reader should feel like they're hearing from someone genuine, capable, and easy to work with \u2014 not someone performing or trying too hard.",
+  "formality_level": "Professional but warm. Think: a polished email to someone you respect but aren't intimidated by. Never stiff, never sloppy.",
+  "personality_traits": [
+    "Warm \u2014 leads with empathy and connection, not ego",
+    "Sociable \u2014 naturally builds rapport and relationships",
+    "Empathetic \u2014 understands people and reads situations well",
+    "Grounded \u2014 stoic mindset, focuses on what she can control rather than what she can't",
+    "Confident without boasting \u2014 states what she did and lets the results speak",
+    "Honest \u2014 doesn't exaggerate or fabricate, flags what doesn't feel right",
+    "Adaptable \u2014 embraces change as a constant and thrives in new environments"
+  ],
+  "writing_style": {
+    "sentence_length": "Medium to long, with a natural flowing rhythm. Not clipped or robotic. Sentences can breathe \u2014 but every clause should earn its place. The goal is warm and articulate, not padded.",
+    "structure": "Leads with the point, then expands with context or a specific example. Doesn't bury the takeaway, but gives it room to land.",
+    "storytelling": "Natural and conversational \u2014 tells stories the way she'd tell a friend, with genuine detail and warmth. Not bullet-point thinking dressed up as prose.",
+    "vocabulary": "Plain, professional English. No jargon, no buzzwords, no filler. Uses real words, not corporate ones. 'Helped grow' not 'leveraged synergies to drive growth'.",
+    "paragraphs": "Medium length. 2-4 sentences per paragraph. Enough to develop a thought, not so long that the reader loses the thread."
+  },
+  "never_do": [
+    "Never use aggressive or pushy sales language ('I am the perfect candidate', 'You won't find anyone better')",
+    "Never sound desperate or overly grateful ('I would be so grateful for any opportunity', 'It would mean the world to me')",
+    "Never use generic AI-sounding phrases ('I am writing to express my interest', 'I believe I would be a valuable asset', 'I am excited to apply for this role')",
+    "Never use corporate jargon for its own sake ('synergies', 'leverage my skillset', 'hit the ground running', 'think outside the box')",
+    "Never open a cover letter with 'I am writing to apply for...' or 'Dear Hiring Manager, I am excited to...'",
+    "Never use exclamation marks excessively",
+    "Never badmouth previous employers or colleagues in any written material",
+    "Never exaggerate achievements beyond what actually happened",
+    "Never pad sentences with filler words \u2014 if a shorter version says the same thing, use the shorter version"
+  ],
+  "always_do": [
+    "Always lead with warmth \u2014 the first sentence should feel human and specific",
+    "Always tie claims to specific results and numbers where possible",
+    "Always sound like a real person wrote it, not a template or an AI",
+    "Always let the writing flow naturally \u2014 it's okay for sentences to be longer if they're saying something",
+    "Always show genuine interest in the company or role, not generic enthusiasm",
+    "Always let achievements speak for themselves rather than self-praising",
+    "Always trim anything that doesn't add value \u2014 warmth is good, waffle is not"
+  ],
+  "cover_letter_rules": {
+    "opening": "Never start with 'I am writing to apply...' Open with something specific about the company or role that connects naturally to your experience. The first line should feel like the start of a conversation, not a form letter.",
+    "tone_throughout": "Conversational but professional. As if you're telling a respected colleague why this role genuinely interests you. Let your personality come through.",
+    "closing": "Confident but not presumptuous. Express interest in a conversation, not desperation for the job. End warmly \u2014 something that feels like you, not a template sign-off.",
+    "length": "3-4 paragraphs. Under 300 words ideally. Every sentence should earn its place, but don't sacrifice your natural voice for brevity.",
+    "structure": "Paragraph 1: Hook \u2014 why this company or role caught your attention, connected to something real. Paragraph 2: What you bring \u2014 your most relevant experience with specific results. Paragraph 3: Why the fit makes sense \u2014 connect your background to what they need. Paragraph 4 (if needed): Warm, confident close."
+  },
+  "answer_writing_rules": {
+    "competency_answers": "Use the STAR framework but don't make it feel mechanical. The answer should read like a natural story with a clear point, not four labelled boxes. Weave the structure in so it flows.",
+    "screening_answers": "Keep these short and direct. No need for storytelling on factual questions.",
+    "tone_consistency": "Every written output \u2014 cover letter, competency answer, screening response \u2014 should sound like the same person wrote it. Warm, clear, grounded."
+  },
+  "recruiter_outreach_rules": {
+    "tone": "Friendly and professional. Not cold or transactional. You're starting a conversation, not making a sales pitch.",
+    "length": "Short \u2014 3-5 sentences max for initial outreach. Respect their time.",
+    "approach": "Reference something specific \u2014 the role, the company, a shared connection. Never send something that could have gone to anyone.",
+    "follow_ups": "Warm and brief. Acknowledge they're busy. Never guilt-trip or chase aggressively."
+  },
+  "example_phrases_that_sound_like_aafreen": [
+    "What drew me to this role is...",
+    "In my time at [company], I...",
+    "This led to...",
+    "I noticed that... so I...",
+    "What I took away from that experience is...",
+    "I'm keen to bring that same approach to..."
+  ],
+  "example_phrases_that_do_NOT_sound_like_aafreen": [
+    "I am writing to express my keen interest in...",
+    "I believe my unique skill set makes me an ideal candidate...",
+    "I would be thrilled to contribute to your dynamic team...",
+    "With my proven track record of delivering results...",
+    "I am confident that I can add significant value to...",
+    "Please do not hesitate to contact me..."
+  ],
+  "worldview_notes": "Aafreen is drawn to stoic philosophy \u2014 the idea of controlling what you can and letting go of what you can't. She sees change as the only constant and genuinely thrives in it (having moved countries every six years since age 11). She values authenticity over performance. Her perception quote ('your perception of me is a reflection of you') signals someone who doesn't chase external validation. This groundedness should come through subtly in her writing \u2014 not as philosophy, but as quiet confidence."
+}

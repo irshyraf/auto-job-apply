@@ -1,0 +1,176 @@
+{
+  "personal": {
+    "full_name": "Aafreen Fathima",
+    "email": "aafreenfathimawork@gmail.com",
+    "phone": "07442014272",
+    "phone_international": "+4407442014272",
+    "address": "48 Falconbrook Gardens, 15 Silvertown Way, E16 1JT",
+    "city": "London",
+    "postcode": "E16 1JT",
+    "date_of_birth": "04/09/1998",
+    "nationality": "Indian"
+  },
+  "right_to_work": {
+    "has_right_to_work_uk": true,
+    "visa_type": "Dependant Visa",
+    "requires_sponsorship": false,
+    "visa_expiry": "DO_NOT_AUTO_FILL",
+    "_strategy": "Never volunteer expiry date. Answer right-to-work questions with 'Yes' only. If a form specifically asks for visa expiry date, flag for manual review \u2014 do not auto-fill."
+  },
+  "education": [
+    {
+      "degree": "MSc International Business Management with Marketing",
+      "institution": "Kingston University",
+      "dates": "2022 - 2023",
+      "grade": "Merit / 2:1",
+      "notable_modules": [
+        {
+          "name": "Consultancy in Practice",
+          "grade": "A",
+          "detail": "Conducted primary and secondary research to assess Valcon's CSR landscape, analysed industry best practices, and developed strategic recommendations to enhance CSR compliance, stakeholder engagement, and sustainability initiatives"
+        }
+      ]
+    },
+    {
+      "degree": "Bachelor Degree (Major in Economics, Statistics, and Mathematics)",
+      "institution": "St. Joseph's College of Arts & Science (Autonomous)",
+      "dates": "2016 - 2019",
+      "grade": null,
+      "notable_modules": []
+    }
+  ],
+  "certifications": [
+    {
+      "name": "E-Fintech Course",
+      "institution": "APAC (Asia Pacific)",
+      "date": "2021",
+      "relevance_tags": [
+        "finance",
+        "technology",
+        "commercial awareness",
+        "digital",
+        "fintech"
+      ]
+    }
+  ],
+  "work_history": [
+    {
+      "job_title": "Marketing & Recruitment",
+      "company": "Caring Hearts Fostering",
+      "type": "Independent Fostering Agency",
+      "location": "London, UK",
+      "dates": "2023 - 2024",
+      "reason_for_leaving": "Seeking career growth",
+      "key_achievements": [
+        "Built structured business development pipeline, boosting qualified leads by 30% and generating \u00a380,000+ revenue",
+        "Secured partnerships worth \u00a320,000 projected revenue; introduced referral models to grow network",
+        "Delivered pitches and award submissions, securing finalist status at Islam Channel Professional Business Award",
+        "Ran multi-platform campaigns (Meta, TikTok, Google, Indeed, Eventbrite) to increase visibility and lead conversion",
+        "Developed data-driven lead generation strategies (master lead tracking sheet, A/B testing, Meta-compliant screening) \u2014 achieving 90% fewer unqualified leads",
+        "Managed CRM systems (Zoho) to track leads, nurture prospects, and optimize data accuracy",
+        "Conducted 20-30 outbound calls daily to engage prospective foster carers",
+        "Optimised SEO, email campaigns, and WordPress content, driving higher engagement and search rankings",
+        "Produced marketing strategy and budget reports and delivered findings through presentations to senior management"
+      ]
+    },
+    {
+      "job_title": "Assistant Product Development / Merchandising",
+      "company": "Welstand Apparel Ltd.",
+      "type": "A design, sourcing, and manufacturing company",
+      "location": "Dhaka, Bangladesh",
+      "dates": "2021 - 2022",
+      "reason_for_leaving": null,
+      "key_achievements": [
+        "Represented company at international trade fairs (Las Vegas MAGIC, Dubai), securing contracts worth \u00a3800,000+",
+        "Strengthened retailer partnerships (Zara, Pull & Bear, Westside), increasing repeat orders by 20%",
+        "Managed end-to-end product development for 10+ collections monthly, ensuring quality and deadlines",
+        "Designed company logo, business cards, trade show materials; optimised website generating 100+ new business enquiries",
+        "Delivered market insights and competitor research to refine strategy"
+      ]
+    },
+    {
+      "job_title": "Founder",
+      "company": "Far Out",
+      "type": "Streetwear label",
+      "location": "Bangalore, India",
+      "dates": "2020 - 2021",
+      "reason_for_leaving": null,
+      "key_achievements": [
+        "Founded streetwear brand, achieving \u00a32,000+ monthly sales (~200 units/month) on \u00a3100/month ad spend",
+        "Achieved 85% repeat purchase ratio reflecting strong customer retention and product-market fit",
+        "Grew Instagram to 1,800 followers organically in 3 months",
+        "Managed full commercial operations: supplier negotiations, logistics, e-commerce, customer relationships",
+        "Art directed marketing shoots and digital campaigns aligned to target demographics"
+      ]
+    }
+  ],
+  "skills": {
+    "it_skills": [
+      "Excel",
+      "PowerPoint",
+      "Word",
+      "Photoshop",
+      "Illustrator",
+      "Zoho CRM",
+      "R",
+      "MATLAB"
+    ],
+    "languages": [
+      {
+        "language": "English",
+        "proficiency": "Native"
+      },
+      {
+        "language": "Hindi",
+        "proficiency": "Native"
+      },
+      {
+        "language": "Bengali",
+        "proficiency": "Proficient"
+      },
+      {
+        "language": "Thai",
+        "proficiency": "Proficient"
+      }
+    ]
+  },
+  "screening_answers_tier1": {
+    "right_to_work_uk": "Yes \u2014 I have full right to work in the UK. No sponsorship required.",
+    "notice_period": "Immediately available",
+    "salary_expectation_minimum": "\u00a328,000",
+    "salary_expectation_ideal": "\u00a330,000 - \u00a340,000",
+    "willing_to_relocate": "London-based roles only. Open to all work setups \u2014 remote, hybrid, or office-based.",
+    "driving_licence": "No",
+    "requires_sponsorship": "No"
+  },
+  "screening_answers_tier2": {
+    "reason_for_looking": "Seeking career growth and the opportunity to apply my marketing, business development, and commercial skills in a more dynamic environment.",
+    "availability": "Immediately available to start",
+    "how_did_you_hear": "Found on [job board name] \u2014 to be dynamically populated per application",
+    "reason_for_leaving_last_role": "Seeking career growth and a role that offers broader scope to develop my commercial and strategic skills."
+  },
+  "links": {
+    "linkedin": "https://www.linkedin.com/in/aafreen-fathima-846870265",
+    "portfolio": "https://aafreenfathimacouk.wordpress.com/"
+  },
+  "documents": {
+    "cv_variants": {
+      "general": "AF_Resume.pdf",
+      "marketing": "AF_Marketing.pdf",
+      "sales": "AF_Sales.pdf",
+      "business_development": "AF_Business_Development.pdf",
+      "agency_account_management": "AF_Agency_Account_Management.pdf"
+    }
+  },
+  "extracurricular": [
+    "Volunteered at NGO \u2014 taught basic English at a school in rural Bangalore; supported daily work at an old age home (2019)",
+    "Led cleanliness drives across Bangalore (2018)",
+    "Vice-President of ZONTA International Club \u2014 advocacy for women's rights, organised events and discussions (2015)"
+  ],
+  "interests": [
+    "Singing",
+    "Guitar",
+    "Violin",
+    "Art"
+  ]
+}

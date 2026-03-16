@@ -1,0 +1,132 @@
+"""
+database.py — SQLite schema creation and connection management.
+All tables are defined here. Run this file directly to initialise a fresh database.
+"""
+
+import sqlite3
+from pathlib import Path
+
+DB_PATH = Path(__file__).parent / "data" / "jobs.db"
+
+
+def get_connection() -> sqlite3.Connection:
+    """Return a connection with row_factory set so rows behave like dicts."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA journal_mode = WAL")
+    return conn
+
+
+def initialise_database() -> None:
+    """Create all tables if they do not already exist."""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # ------------------------------------------------------------------
+    # TABLE: jobs
+    # One row per unique job posting discovered by the scraper.
+    # dedup_hash prevents cross-board duplicates (hash of company+title+location).
+    # ------------------------------------------------------------------
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS jobs (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            -- Source metadata
+            source_board        TEXT    NOT NULL,           -- e.g. "linkedin", "indeed", "reed"
+            source_url          TEXT    NOT NULL,
+            dedup_hash          TEXT    NOT NULL UNIQUE,    -- SHA-256 of company+title+location
+
+            -- Job details (populated by scraper)
+            job_title           TEXT    NOT NULL,
+            company_name        TEXT    NOT NULL,
+            location            TEXT,
+            work_setup          TEXT,                       -- "remote" | "hybrid" | "on-site"
+            salary_min          INTEGER,                    -- in GBP, nullable
+            salary_max          INTEGER,
+            contract_type       TEXT,                       -- "permanent" | "contract" | etc.
+            description_text    TEXT,
+
+            -- Dates
+            date_posted         TEXT,                       -- ISO-8601 string from source
+            date_scraped        TEXT    NOT NULL DEFAULT (datetime('now')),
+
+            -- Processing status
+            -- Allowed values: scraped | filtered_out | pending_review | approved |
+            --                  in_progress | submitted | rejected | no_response | interview
+            status              TEXT    NOT NULL DEFAULT 'scraped',
+
+            -- Scoring & matching (populated by matcher module)
+            match_score         REAL,                       -- 0.0 – 1.0
+            match_notes         TEXT,                       -- brief rationale from matcher
+            cv_variant_used     TEXT,                       -- e.g. "BD", "Marketing"
+
+            -- Company research (populated by matcher / review gate)
+            company_dossier     TEXT,                       -- raw scraped company info
+            company_sector      TEXT,
+
+            -- Review Gate metadata
+            review_approved_at  TEXT,                       -- ISO-8601, set when user approves
+            submitted_at        TEXT,                       -- ISO-8601, set on submission
+            application_ref     TEXT,                       -- confirmation number / reference
+
+            -- Flags
+            flagged_visa        INTEGER NOT NULL DEFAULT 0, -- 1 if visa expiry question found
+            dealbreaker_found   INTEGER NOT NULL DEFAULT 0  -- 1 if hard dealbreaker detected
+        )
+    """)
+
+    # ------------------------------------------------------------------
+    # TABLE: application_answers
+    # One row per form field per job application.
+    # ------------------------------------------------------------------
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS application_answers (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_id          INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+
+            -- Field identity
+            field_name      TEXT    NOT NULL,   -- label or name attribute from the form
+            field_type      TEXT,               -- "text_short" | "text_long" | "dropdown" |
+                                                --  "radio" | "checkbox" | "file_upload"
+
+            -- Classification (from question_classification_rules.json)
+            tier            INTEGER NOT NULL,   -- 1 | 2 | 3 | 4
+            competency_tags TEXT,               -- JSON array of tags, used for Tier 4
+
+            -- Answer content
+            answer_text     TEXT,               -- final answer to be submitted
+            answer_source   TEXT,               -- "auto_vault" | "auto_bank" | "ai_generated" | "manual"
+
+            -- Tier 4 traceability
+            story_id        TEXT,               -- e.g. "AB-003", links back to answer_bank.json
+
+            -- Review Gate state
+            needs_review    INTEGER NOT NULL DEFAULT 0,  -- 1 = amber highlight in Review Gate
+            flagged         INTEGER NOT NULL DEFAULT 0,  -- 1 = red, blocks submission (visa expiry)
+            user_edited     INTEGER NOT NULL DEFAULT 0,  -- 1 = user overrode AI answer
+            approved        INTEGER NOT NULL DEFAULT 0,  -- 1 = user approved in Review Gate
+
+            -- Audit
+            generated_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+            updated_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    # ------------------------------------------------------------------
+    # INDEXES — speed up the most common queries
+    # ------------------------------------------------------------------
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status      ON jobs(status)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_score       ON jobs(match_score)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_scraped     ON jobs(date_scraped)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_answers_job_id   ON application_answers(job_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_answers_tier     ON application_answers(tier)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_answers_flagged  ON application_answers(flagged)")
+
+    conn.commit()
+    conn.close()
+    print(f"Database initialised at: {DB_PATH}")
+
+
+if __name__ == "__main__":
+    initialise_database()
