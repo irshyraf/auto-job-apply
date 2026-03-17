@@ -899,6 +899,44 @@ def run_submit(job_ids: list[int] | None = None, dry_run: bool = True) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# UI-callable wrapper — used by Streamlit app.py
+# ---------------------------------------------------------------------------
+
+def submit_single_job(job_id: int) -> dict:
+    """
+    Submit one approved job. Called by the Streamlit UI when the user clicks
+    the Submit button on a Stage 2 card. Always live (not dry-run).
+
+    Returns {"success": bool, "ref": str|None, "error": str|None, "log": list}
+    """
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT * FROM jobs WHERE id=? AND status='approved'", (job_id,)
+    ).fetchone()
+    conn.close()
+
+    if not row:
+        return {"success": False, "ref": None, "error": f"Job {job_id} not found or not in 'approved' status", "log": []}
+
+    job     = dict(row)
+    answers = _load_answers(job_id)
+
+    _mark_in_progress(job_id)
+    result  = asyncio.run(submit_job(job, answers, dry_run=False))
+
+    if result["status"] == "submitted":
+        _mark_submitted(job_id, result.get("ref"))
+        return {"success": True, "ref": result.get("ref"), "error": None, "log": result["log"]}
+    else:
+        _mark_failed(job_id)
+        error_msg = next(
+            (line for line in reversed(result["log"]) if "ERROR" in line or "BLOCKED" in line or "WARN" in line),
+            result["status"]
+        )
+        return {"success": False, "ref": None, "error": error_msg, "log": result["log"]}
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 

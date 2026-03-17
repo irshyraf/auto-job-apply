@@ -109,16 +109,14 @@
   },
 
   "scrape_schedule": {
-    "frequency": "Once daily for all boards. Single comprehensive sweep.",
-    "schedule": {
-      "daily_run": "08:00 — All Tier 1 boards + Tier 2 boards. All query tiers. This catches overnight and early morning postings."
-    },
+    "frequency": "Manual only. Triggered by the 'Scrape now' button in the dashboard UI. No cron jobs, no timers, no background scheduling.",
+    "schedule": "NONE — user-initiated only",
     "job_cap": {
       "max_new_matches_per_run": 10,
-      "behaviour": "After scraping, filtering, deduplication, and matching, the system takes the TOP 10 matches by match score and stops. Remaining matches are stored in the database as 'queued' and promoted in the next run if slots are available.",
-      "rationale": "Hard cap to control API costs. At ~$0.04-0.07 per tailored application (Sonnet + prompt caching), 10 jobs/day keeps monthly spend within £10-15 budget."
+      "behaviour": "After scraping, filtering, deduplication, and matching, the system takes the TOP 10 matches by match score and stops. Remaining matches are stored in the database as 'queued' and promoted in the next scrape if slots are available.",
+      "configurable": "User can change this value in Settings page without touching code."
     },
-    "notes": "The single daily run at 08:00 catches the majority of new postings. Employers typically post between 9am-5pm, so the next morning's sweep captures a full day of new listings. Queued matches roll forward automatically."
+    "notes": "The user controls when scraping happens. They click 'Scrape now', wait for results, review matches, approve, wait for tailoring, review content, submit one by one. Everything is input-driven."
   },
 
   "filters": {

@@ -527,6 +527,64 @@ def run_answer_gen(
 
 
 # ---------------------------------------------------------------------------
+# UI-callable wrapper — used by Streamlit app.py
+# ---------------------------------------------------------------------------
+
+# Standard field set pre-generated at Stage 1 approval so user can review
+# before submitting. Submitter still handles any additional on-the-fly fields.
+_STANDARD_PRE_GENERATE_FIELDS = [
+    # Tier 1 factual — from vault, zero API cost
+    {"label": "First name",                                     "field_type": "text_short"},
+    {"label": "Last name / Surname",                            "field_type": "text_short"},
+    {"label": "Email address",                                  "field_type": "text_short"},
+    {"label": "Phone number",                                   "field_type": "text_short"},
+    {"label": "Do you have the right to work in the UK?",       "field_type": "radio"},
+    {"label": "Do you require visa sponsorship?",               "field_type": "radio"},
+    {"label": "What is your salary expectation?",               "field_type": "text_short"},
+    {"label": "What is your notice period / availability?",     "field_type": "text_short"},
+    {"label": "LinkedIn profile URL",                           "field_type": "text_short"},
+    {"label": "Current location / city",                        "field_type": "text_short"},
+    # Tier 1 special — visa expiry always flagged
+    {"label": "Please state your visa expiry date",             "field_type": "text_short"},
+    {"label": "Do you have a criminal record?",                 "field_type": "radio"},
+    {"label": "Do you consider yourself to have a disability?", "field_type": "radio"},
+    {"label": "What is your gender?",                           "field_type": "dropdown"},
+    # Tier 2 — from vault
+    {"label": "How did you hear about this role?",              "field_type": "dropdown"},
+    {"label": "Why are you looking for a new role?",            "field_type": "text_long"},
+    # Tier 4 — best STAR story
+    {"label": "Tell me about a time you exceeded a commercial target", "field_type": "text_long"},
+    {"label": "Describe a situation where you had to build a relationship quickly", "field_type": "text_long"},
+    # Tier 3 — AI-generated role-specific
+    {"label": "Why do you want to work at this company?",       "field_type": "text_long"},
+    {"label": "What relevant experience do you have for this role?", "field_type": "text_long"},
+]
+
+
+def generate_answers_for_job(job_id: int, want_cover_letter: bool = True) -> dict:
+    """
+    Pre-generate answers for a standard set of common fields.
+    Called by the Streamlit UI immediately after CV tailoring.
+
+    Returns {"success": bool, "answer_count": int, "flagged": int, "error": str|None}
+    """
+    try:
+        stats = run_answer_gen(
+            job_id=job_id,
+            fields=_STANDARD_PRE_GENERATE_FIELDS,
+            want_cover_letter=want_cover_letter,
+        )
+        return {
+            "success":      True,
+            "answer_count": stats.get("t1", 0) + stats.get("t2", 0) + stats.get("t3", 0) + stats.get("t4", 0),
+            "flagged":      stats.get("flagged", 0),
+            "error":        None,
+        }
+    except Exception as e:
+        return {"success": False, "answer_count": 0, "flagged": 0, "error": str(e)}
+
+
+# ---------------------------------------------------------------------------
 # CLI — demo with a realistic field set for the given job
 # ---------------------------------------------------------------------------
 

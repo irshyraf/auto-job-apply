@@ -283,6 +283,45 @@ def run_tailor_pipeline() -> None:
     print(f"{'=' * 56}\n")
 
 
+# ---------------------------------------------------------------------------
+# UI-callable wrapper — used by Streamlit app.py Dashboard
+# ---------------------------------------------------------------------------
+
+def run_scrape_and_match() -> dict:
+    """
+    Scrape jobs and match/score them. Called by the Streamlit Dashboard when
+    the user clicks 'Scrape now'. Returns a summary dict the UI can display.
+
+    Returns {"new_matches": int, "queued": int, "inserted": int, "timestamp": str}
+    """
+    from datetime import datetime
+    from modules.scraper import run_scrape
+    from modules.matcher import run_match
+    from modules.tracker import auto_update_no_response
+
+    conn = get_connection()
+    promoted = _promote_queued_jobs(conn)
+    conn.close()
+
+    scrape_stats = run_scrape(priority="high")
+    match_stats  = run_match()
+    auto_update_no_response()
+
+    conn = get_connection()
+    queued = _apply_job_cap(conn)
+    stage1_count = conn.execute(
+        "SELECT COUNT(*) FROM jobs WHERE status = 'pending_stage_1'"
+    ).fetchone()[0]
+    conn.close()
+
+    return {
+        "new_matches": stage1_count,
+        "queued":      queued,
+        "inserted":    scrape_stats.get("inserted", 0),
+        "timestamp":   datetime.now().strftime("%Y-%m-%d %H:%M"),
+    }
+
+
 PHASES = {
     "scrape":   phase_scrape,
     "match":    phase_match,

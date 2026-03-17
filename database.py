@@ -128,6 +128,26 @@ def initialise_database() -> None:
     """)
 
     # ------------------------------------------------------------------
+    # TABLE: api_usage_log
+    # One row per Claude API call. Used for the "API spend this month" metric
+    # on the Dashboard and the budget enforcement in Settings.
+    # ------------------------------------------------------------------
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS api_usage_log (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_id          INTEGER REFERENCES jobs(id) ON DELETE SET NULL,
+            module          TEXT    NOT NULL,   -- "cv_tailor" | "answer_gen"
+            call_type       TEXT    NOT NULL,   -- "tailor" | "tier3" | "tier4" | "cover_letter"
+            input_tokens    INTEGER NOT NULL DEFAULT 0,
+            output_tokens   INTEGER NOT NULL DEFAULT 0,
+            cost_usd        REAL    NOT NULL DEFAULT 0.0,
+            timestamp       TEXT    NOT NULL
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_api_usage_timestamp ON api_usage_log(timestamp)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_api_usage_job_id    ON api_usage_log(job_id)")
+
+    # ------------------------------------------------------------------
     # INDEXES — speed up the most common queries
     # ------------------------------------------------------------------
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status      ON jobs(status)")
@@ -140,6 +160,33 @@ def initialise_database() -> None:
     conn.commit()
     conn.close()
     print(f"Database initialised at: {DB_PATH}")
+
+
+def log_api_usage(job_id: int | None, module: str, call_type: str,
+                  input_tokens: int, output_tokens: int, cost_usd: float) -> None:
+    """Insert one row into api_usage_log. Called after every Claude API call."""
+    from datetime import datetime, timezone
+    conn = get_connection()
+    conn.execute(
+        """INSERT INTO api_usage_log (job_id, module, call_type, input_tokens, output_tokens, cost_usd, timestamp)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (job_id, module, call_type, input_tokens, output_tokens, cost_usd,
+         datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"))
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_monthly_spend() -> float:
+    """Return total API spend (USD) for the current calendar month."""
+    conn = get_connection()
+    row = conn.execute(
+        """SELECT COALESCE(SUM(cost_usd), 0.0) as total
+           FROM api_usage_log
+           WHERE strftime('%Y-%m', timestamp) = strftime('%Y-%m', 'now')"""
+    ).fetchone()
+    conn.close()
+    return float(row["total"])
 
 
 if __name__ == "__main__":

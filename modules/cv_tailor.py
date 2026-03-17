@@ -482,6 +482,50 @@ def run_tailor(job_ids: list[int] | None = None) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# UI-callable wrapper — used by Streamlit app.py
+# ---------------------------------------------------------------------------
+
+def tailor_single_job(job_id: int) -> dict:
+    """
+    Tailor one job and update its DB status. Called by the Streamlit UI when
+    the user clicks Approve at Stage 1.
+
+    Returns {"success": bool, "pdf_path": str|None, "error": str|None, "violations": list}
+    """
+    conn = get_connection()
+    row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+    conn.close()
+
+    if not row:
+        return {"success": False, "pdf_path": None, "error": f"Job {job_id} not found", "violations": []}
+
+    job = dict(row)
+    result = tailor_job(job)
+
+    if result["status"] == "render_failed":
+        return {"success": False, "pdf_path": None, "error": "PDF render failed", "violations": result.get("violations", [])}
+
+    if result.get("pdf_path"):
+        write_conn = get_connection()
+        existing_notes = job.get("match_notes") or ""
+        new_notes = f"{existing_notes} | PDF: {result['pdf_path']}"
+        write_conn.execute(
+            "UPDATE jobs SET match_notes=?, status='pending_stage_2' WHERE id=?",
+            (new_notes.strip(" |"), job_id)
+        )
+        write_conn.commit()
+        write_conn.close()
+        return {
+            "success":    True,
+            "pdf_path":   result["pdf_path"],
+            "error":      None,
+            "violations": result.get("violations", []),
+        }
+
+    return {"success": False, "pdf_path": None, "error": "Unknown error", "violations": result.get("violations", [])}
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
