@@ -132,10 +132,10 @@ def _get_cv_pdf_path(job: dict) -> Path | None:
     return None
 
 
-def _get_cover_letter_pdf_path(job_id: int) -> Path | None:
+def _ensure_cover_letter(job_id: int, job: dict) -> str | None:
     """
-    Generate a simple PDF from the stored cover letter text.
-    Saves to output/cover_letter_<job_id>.pdf and returns the path.
+    Return stored cover letter text, generating it first if not yet in DB.
+    Only called when the form actually has a cover letter field.
     """
     conn = get_connection()
     row = conn.execute(
@@ -144,7 +144,46 @@ def _get_cover_letter_pdf_path(job_id: int) -> Path | None:
     ).fetchone()
     conn.close()
 
-    if not row or not row["answer_text"]:
+    if row and row["answer_text"]:
+        return row["answer_text"]
+
+    # Not yet generated — generate now
+    print(f"  Generating cover letter for job {job_id}...")
+    from modules.answer_gen import generate_cover_letter, _save_answer
+    text = generate_cover_letter(job)
+    if text:
+        conn2 = get_connection()
+        _save_answer(conn2, job_id, {
+            "field_name":    "cover_letter",
+            "field_type":    "cover_letter",
+            "tier":          3,
+            "answer_text":   text,
+            "answer_source": "claude",
+            "needs_review":  1,
+            "flagged":       0,
+        })
+        conn2.commit()
+        conn2.close()
+    return text
+
+
+def _get_cover_letter_pdf_path(job_id: int, job: dict | None = None) -> Path | None:
+    """
+    Return a PDF of the cover letter, generating the text first if needed.
+    Pass job dict to enable on-the-fly generation.
+    """
+    if job is not None:
+        text = _ensure_cover_letter(job_id, job)
+    else:
+        conn = get_connection()
+        row = conn.execute(
+            "SELECT answer_text FROM application_answers WHERE job_id=? AND field_name='cover_letter'",
+            (job_id,)
+        ).fetchone()
+        conn.close()
+        text = row["answer_text"] if (row and row["answer_text"]) else None
+
+    if not text:
         return None
 
     text = row["answer_text"]
@@ -317,7 +356,8 @@ async def generic_fill_form(
     stats = {"filled": 0, "skipped": 0, "file_uploads": 0, "unmatched": []}
     answers_by_name = {a["field_name"]: a for a in answers if not a["flagged"]}
     cv_pdf = _get_cv_pdf_path(job)
-    cl_pdf = _get_cover_letter_pdf_path(job["id"])
+    # Cover letter PDF is generated lazily — only when form has a cover letter field
+    cl_pdf = None
 
     # Gather all form inputs
     inputs     = await page.locator("input:visible, textarea:visible").all()
@@ -336,8 +376,20 @@ async def generic_fill_form(
 
         answer = _match_answer(label, answers)
         if not answer:
-            stats["unmatched"].append(label[:60])
-            continue
+            # Generate on-the-fly for this specific field
+            from modules.answer_gen import classify_and_answer, _save_answer
+            generated = classify_and_answer(label, input_type, job, char_limit=None)
+            if generated and generated.get("answer_text"):
+                conn_g = get_connection()
+                _save_answer(conn_g, job["id"], generated)
+                conn_g.commit()
+                conn_g.close()
+                answers.append(generated)
+                answer = generated
+                log.append(f"  GEN   [{generated['tier']}] {label[:50]}")
+            else:
+                stats["unmatched"].append(label[:60])
+                continue
 
         log.append(f"  FILL  [{answer['tier']}] {label[:50]} → {(answer['answer_text'] or '')[:60]}")
         if not dry_run:
@@ -359,7 +411,18 @@ async def generic_fill_form(
             continue
         answer = _match_answer(label, answers)
         if not answer:
-            continue
+            from modules.answer_gen import classify_and_answer, _save_answer
+            generated = classify_and_answer(label, "textarea", job, char_limit=None)
+            if generated and generated.get("answer_text"):
+                conn_g = get_connection()
+                _save_answer(conn_g, job["id"], generated)
+                conn_g.commit()
+                conn_g.close()
+                answers.append(generated)
+                answer = generated
+                log.append(f"  GEN   [{generated['tier']}] {label[:50]}")
+            else:
+                continue
         log.append(f"  FILL  [{answer['tier']}] {label[:50]} → {(answer['answer_text'] or '')[:60]}")
         if not dry_run:
             try:
@@ -427,13 +490,16 @@ async def generic_fill_form(
                 stats["skipped"] += 1
 
         elif any(kw in label_lower for kw in ["cover", "letter", "covering"]):
+            # Generate cover letter on-the-fly if not yet done
+            if cl_pdf is None:
+                cl_pdf = _get_cover_letter_pdf_path(job["id"], job)
             if cl_pdf:
                 log.append(f"  UPLOAD  Cover letter → {cl_pdf.name}")
                 if not dry_run:
                     await el.set_input_files(str(cl_pdf))
                     stats["file_uploads"] += 1
             else:
-                log.append(f"  WARN  Cover letter upload requested but no PDF found")
+                log.append(f"  WARN  Cover letter generation failed")
                 stats["skipped"] += 1
 
     return stats

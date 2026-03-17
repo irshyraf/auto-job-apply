@@ -89,30 +89,11 @@ def phase_track() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Automated pipeline (phases 1–4 + digest, no human steps)
+# Automated pipeline (scrape → match → tailor → digest)
 # ---------------------------------------------------------------------------
 
-# Standard fields generated for every job automatically.
-# The real form fields are unknown until submission time — these cover the
-# most common application questions so answers are pre-generated and ready
-# for the Review Gate and submitter.
-_AUTO_FIELDS = [
-    {"label": "First Name",                           "field_type": "text",     "char_limit": None},
-    {"label": "Last Name",                            "field_type": "text",     "char_limit": None},
-    {"label": "Email Address",                        "field_type": "text",     "char_limit": None},
-    {"label": "Phone Number",                         "field_type": "text",     "char_limit": None},
-    {"label": "LinkedIn Profile",                     "field_type": "text",     "char_limit": None},
-    {"label": "Right to work in UK",                  "field_type": "radio",    "char_limit": None},
-    {"label": "Expected salary",                      "field_type": "text",     "char_limit": None},
-    {"label": "Notice period",                        "field_type": "text",     "char_limit": None},
-    {"label": "How did you hear about this role?",    "field_type": "select",   "char_limit": None},
-    {"label": "Why do you want to work here?",        "field_type": "textarea", "char_limit": 500},
-    {"label": "Why are you interested in this role?", "field_type": "textarea", "char_limit": 500},
-    {"label": "Tell us about yourself",               "field_type": "textarea", "char_limit": 600},
-    {"label": "Describe a time you achieved a challenging goal", "field_type": "textarea", "char_limit": 600},
-    {"label": "Describe a time you managed a challenging client relationship", "field_type": "textarea", "char_limit": 600},
-    {"label": "Give an example of working under pressure",       "field_type": "textarea", "char_limit": 600},
-]
+JOB_CAP          = 10    # max jobs tailored per auto run (highest score first)
+TAILOR_SCORE_MIN = 0.60  # only tailor CVs for jobs at or above this match score
 
 
 def run_auto_pipeline(skip_scrape: bool = False) -> None:
@@ -120,17 +101,19 @@ def run_auto_pipeline(skip_scrape: bool = False) -> None:
     Runs the fully automated portion of the pipeline:
       1. Scrape new jobs
       2. Match / score
-      3. Tailor CVs for all pending_review jobs
-      4. Generate standard answers + cover letter for each
-      5. Print daily digest
+      3. Tailor CVs (top JOB_CAP jobs scoring >= TAILOR_SCORE_MIN only)
+      4. Print daily digest
+
+    Answers and cover letters are NOT generated here.
+    They are generated on-the-fly by the submitter when it encounters
+    the real fields on each application form.
 
     Human steps (Review Gate + Submit) are NOT run here — open them manually.
     """
-    from modules.scraper  import run_scrape
-    from modules.matcher  import run_match
+    from modules.scraper   import run_scrape
+    from modules.matcher   import run_match
     from modules.cv_tailor import run_tailor
-    from modules.answer_gen import run_answer_gen
-    from modules.tracker  import generate_digest, auto_update_no_response
+    from modules.tracker   import generate_digest, auto_update_no_response
     from database import get_connection
 
     print("\n" + "=" * 56)
@@ -139,45 +122,40 @@ def run_auto_pipeline(skip_scrape: bool = False) -> None:
 
     # 1. Scrape
     if not skip_scrape:
-        print("\n[1/4] Scraping jobs...")
+        print("\n[1/3] Scraping jobs...")
         stats = run_scrape(priority="high")
         print(f"  Inserted: {stats['inserted']}  Duplicates: {stats['skipped_dup']}  Filtered: {stats['filtered_out']}")
     else:
-        print("\n[1/4] Scrape skipped.")
+        print("\n[1/3] Scrape skipped.")
 
     # 2. Match
-    print("\n[2/4] Matching and scoring...")
+    print("\n[2/3] Matching and scoring...")
     stats = run_match()
     print(f"  Pending review: {stats['matched']}  Filtered out: {stats['filtered_out']}")
 
-    # 3. Tailor CVs for all pending_review jobs
-    print("\n[3/4] Tailoring CVs...")
-    tailor_stats = run_tailor()
-    print(f"  OK: {tailor_stats['ok']}  Warnings: {tailor_stats['warnings']}  Failed: {tailor_stats['failed']}")
+    # 3. Tailor CVs — top JOB_CAP jobs scoring >= TAILOR_SCORE_MIN, no CV yet
+    print(f"\n[3/3] Tailoring CVs (score >= {TAILOR_SCORE_MIN}, top {JOB_CAP})...")
+    conn_t = get_connection()
+    high_score_ids = [
+        row["id"] for row in conn_t.execute(
+            """SELECT id FROM jobs
+               WHERE status = 'pending_review'
+                 AND match_score >= ?
+                 AND (match_notes IS NULL OR match_notes NOT LIKE '%PDF:%')
+               ORDER BY match_score DESC
+               LIMIT ?""",
+            (TAILOR_SCORE_MIN, JOB_CAP)
+        ).fetchall()
+    ]
+    conn_t.close()
 
-    # 4. Generate answers for all pending_review jobs that don't have answers yet
-    print("\n[4/4] Generating answers and cover letters...")
-    conn = get_connection()
-    jobs_needing_answers = conn.execute("""
-        SELECT DISTINCT j.id, j.job_title, j.company_name
-        FROM jobs j
-        WHERE j.status = 'pending_review'
-          AND NOT EXISTS (
-              SELECT 1 FROM application_answers a WHERE a.job_id = j.id
-          )
-        ORDER BY j.match_score DESC
-    """).fetchall()
-    conn.close()
-
-    if not jobs_needing_answers:
-        print("  No new jobs need answers.")
+    if high_score_ids:
+        tailor_stats = run_tailor(job_ids=high_score_ids)
+        print(f"  OK: {tailor_stats['ok']}  Warnings: {tailor_stats['warnings']}  Failed: {tailor_stats['failed']}")
     else:
-        for job_row in jobs_needing_answers:
-            job_id = job_row["id"]
-            print(f"\n  Generating for: {job_row['job_title']} @ {job_row['company_name']}")
-            run_answer_gen(job_id=job_id, fields=_AUTO_FIELDS, want_cover_letter=True)
+        print("  No new jobs need CV tailoring.")
 
-    # 5. Auto-update no_response + digest
+    # 4. Auto-update no_response + digest
     auto_update_no_response()
     print("\n" + generate_digest())
 

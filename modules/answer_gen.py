@@ -203,7 +203,7 @@ Result: {story['result']}
 ## JOB CONTEXT
 Title: {job.get('job_title', '')}
 Company: {job.get('company_name', '')}
-JD excerpt (first 800 chars): {(job.get('description_text') or '')[:800]}
+JD excerpt (first 600 chars): {(job.get('description_text') or '')[:600]}
 
 ## TONE GUIDE (key rules)
 {json.dumps(tv.get('never_do', []), indent=2)}
@@ -248,7 +248,7 @@ def _generate_tier3(question_label: str, job: dict, char_limit: int | None = Non
 Title: {job.get('job_title', '')}
 Company: {job.get('company_name', '')}
 Location: {job.get('location', '')}
-JD (first 1000 chars): {(job.get('description_text') or '')[:1000]}
+JD (first 600 chars): {(job.get('description_text') or '')[:600]}
 
 ## COMPANY DOSSIER
 {job.get('company_dossier') or 'Not available.'}
@@ -294,7 +294,7 @@ def generate_cover_letter(job: dict) -> str:
 Title: {job.get('job_title', '')}
 Company: {job.get('company_name', '')}
 Location: {job.get('location', '')}
-JD: {(job.get('description_text') or '')[:1500]}
+JD: {(job.get('description_text') or '')[:800]}
 
 ## COMPANY DOSSIER
 {job.get('company_dossier') or 'Not available.'}

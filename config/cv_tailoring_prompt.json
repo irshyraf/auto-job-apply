@@ -24,7 +24,7 @@
 
   "api_config": {
     "model": "claude-sonnet-4-20250514",
-    "max_tokens": 4000,
+    "max_tokens": 2500,
     "temperature": 0.3,
     "_notes": "Low temperature for consistency. Sonnet is the right cost/quality balance for text rewriting. Opus would be overkill for this task."
   },
