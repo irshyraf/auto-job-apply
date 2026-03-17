@@ -158,7 +158,7 @@ def _ensure_cover_letter(job_id: int, job: dict) -> str | None:
             "field_type":    "cover_letter",
             "tier":          3,
             "answer_text":   text,
-            "answer_source": "claude",
+            "answer_source": "ai_generated",
             "needs_review":  1,
             "flagged":       0,
         })
@@ -186,7 +186,6 @@ def _get_cover_letter_pdf_path(job_id: int, job: dict | None = None) -> Path | N
     if not text:
         return None
 
-    text = row["answer_text"]
     out_path = OUTPUT_DIR / f"cover_letter_{job_id}.pdf"
 
     # Use Node + a minimal HTML template to render the cover letter as PDF
@@ -379,6 +378,10 @@ async def generic_fill_form(
             # Generate on-the-fly for this specific field
             from modules.answer_gen import classify_and_answer, _save_answer
             generated = classify_and_answer(label, input_type, job, char_limit=None)
+            if generated and generated.get("flagged"):
+                log.append(f"  BLOCKED  [{label[:50]}] flagged — manual required")
+                stats["skipped"] += 1
+                continue
             if generated and generated.get("answer_text"):
                 conn_g = get_connection()
                 _save_answer(conn_g, job["id"], generated)
@@ -413,6 +416,10 @@ async def generic_fill_form(
         if not answer:
             from modules.answer_gen import classify_and_answer, _save_answer
             generated = classify_and_answer(label, "textarea", job, char_limit=None)
+            if generated and generated.get("flagged"):
+                log.append(f"  BLOCKED  [{label[:50]}] flagged — manual required")
+                stats["skipped"] += 1
+                continue
             if generated and generated.get("answer_text"):
                 conn_g = get_connection()
                 _save_answer(conn_g, job["id"], generated)

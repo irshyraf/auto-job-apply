@@ -14,7 +14,7 @@ Scoring breakdown (max 1.0):
 After scoring:
   Dealbreaker detected  → status='filtered_out', dealbreaker_found=1
   match_score < 0.25    → status='filtered_out'
-  match_score >= 0.25   → status='pending_review'
+  match_score >= 0.25   → status='pending_stage_1'
 
 CV variant is selected from target_profile.json cv_variant_selection map.
 
@@ -256,7 +256,7 @@ def run_match() -> dict:
         # --- Seniority filter ---
         if _SENIORITY_PREFIXES.match(job["job_title"].strip()):
             conn.execute(
-                "UPDATE jobs SET status='filtered_out', match_notes=? WHERE id=?",
+                "UPDATE jobs SET status='filtered_out', match_score=0.0, match_notes=? WHERE id=?",
                 (f"Too senior: '{job['job_title']}'", job["id"])
             )
             stats["filtered_out"] += 1
@@ -268,7 +268,7 @@ def run_match() -> dict:
         )
         if is_db:
             conn.execute(
-                "UPDATE jobs SET status='filtered_out', dealbreaker_found=1, match_notes=? WHERE id=?",
+                "UPDATE jobs SET status='filtered_out', dealbreaker_found=1, match_score=0.0, match_notes=? WHERE id=?",
                 (reason, job["id"])
             )
             stats["filtered_out"] += 1
@@ -290,7 +290,7 @@ def run_match() -> dict:
 
         conn.execute("""
             UPDATE jobs
-            SET status='pending_review',
+            SET status='pending_stage_1',
                 match_score=?,
                 match_notes=?,
                 cv_variant_used=?

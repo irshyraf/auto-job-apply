@@ -1,20 +1,44 @@
 {
   "_meta": {
     "name": "Review Gate UX Design — Module 5 Configuration",
-    "version": "1.0",
+    "version": "1.1",
     "created": "2026-03-16",
-    "description": "Card layout, interaction patterns, and display rules for the Review Gate. This is the single human checkpoint in the pipeline."
+    "updated": "2026-03-17",
+    "description": "Two-stage Review Gate. Stage 1: lightweight match approval (before API costs). Stage 2: full content review (after tailoring). This is the human checkpoint in the pipeline."
   },
 
   "design_principles": {
-    "core_goal": "Maximum control with minimum friction. The user should be able to review and approve 20 applications in ~20 minutes.",
-    "visual_hierarchy": "Tier 1-2 answers fade into the background. Tier 3-4 answers demand attention. Flagged fields (visa expiry only) block submission.",
-    "one_screen_rule": "Everything needed to make a decision about one application should be visible on a single card without navigating away.",
-    "batch_friendly": "Support reviewing applications in batches of 10-20 in a single sitting."
+    "core_goal": "Maximum control with minimum cost. Stage 1 costs nothing — you decide which matches are worth pursuing. Stage 2 only runs for approved matches.",
+    "visual_hierarchy": "Stage 1 is minimal (title, company, salary, match score, JD summary). Stage 2 is the full card (CV, answers, cover letter).",
+    "one_screen_rule": "Everything needed to make a decision should be visible on a single card without navigating away.",
+    "cost_awareness": "The pipeline spends ZERO API credits until after Stage 1 approval. This is the primary cost control mechanism."
+  },
+
+  "stage_1_match_approval": {
+    "_description": "Lightweight review. Shown BEFORE any API calls. User decides which scraped matches are worth tailoring. Max 10 per run.",
+    "card_contents": [
+      "Job title",
+      "Company name",
+      "Location and work setup",
+      "Salary (if available, otherwise 'not listed')",
+      "Match score badge (0-100%)",
+      "2-3 sentence JD summary (extracted by Module 2, no API cost)",
+      "Link to original job advert"
+    ],
+    "actions": {
+      "approve": "Job moves to the tailoring queue (Modules 3 + 4 begin processing). API costs incurred from here.",
+      "skip": "Job removed from pipeline. Logged as 'skipped_at_stage_1'. No API cost."
+    },
+    "estimated_time": "~15 seconds per job. 10 jobs takes ~2.5 minutes.",
+    "display": "Compact card format. No CV, no answers, no cover letter — those don't exist yet."
+  },
+
+  "stage_2_content_review": {
+    "_description": "Full review. Shown AFTER tailoring is complete. Only approved matches from Stage 1 appear here."
   },
 
   "card_layout": {
-    "_description": "Each pending application is rendered as one review card. Cards are displayed in a vertical list, newest first.",
+    "_description": "STAGE 2 — Full review card. Only shown for jobs that passed Stage 1. Each approved application is rendered as one review card with all generated content.",
     "sections": [
       {
         "section": "header",

@@ -52,8 +52,22 @@ def initialise_database() -> None:
             date_scraped        TEXT    NOT NULL DEFAULT (datetime('now')),
 
             -- Processing status
-            -- Allowed values: scraped | filtered_out | pending_review | approved |
-            --                  in_progress | submitted | rejected | no_response | interview
+            -- Allowed values:
+            --   scraped           → just discovered by scraper
+            --   pending_stage_1   → matched, awaiting Stage 1 lightweight review
+            --   approved_stage_1  → approved at Stage 1, queued for CV tailoring
+            --   skipped_stage_1   → rejected at Stage 1 (no API cost incurred)
+            --   queued            → matched but beyond JOB_CAP; auto-promoted next run
+            --   pending_stage_2   → tailored, awaiting Stage 2 full content review
+            --   skipped_stage_2   → rejected at Stage 2
+            --   approved          → approved at Stage 2, ready to submit
+            --   in_progress       → submission in flight
+            --   submitted         → successfully submitted
+            --   no_response       → submitted >14 days, no reply
+            --   interview         → interview booked
+            --   rejected          → rejected by employer
+            --   withdrawn         → withdrawn by candidate
+            --   filtered_out      → removed by automated filters (legacy)
             status              TEXT    NOT NULL DEFAULT 'scraped',
 
             -- Scoring & matching (populated by matcher module)

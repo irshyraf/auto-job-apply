@@ -1,20 +1,30 @@
 """
 main.py — Entry point for the Automated Job Application Pipeline.
 
-Pipeline phases (build order from handoff brief):
+Pipeline flow (two-stage Review Gate architecture):
   Phase 1  — Repo setup, database, config loader          ← DONE
   Phase 2a — Job scraper (Module 1: scraper.py)           ← DONE
   Phase 2b — Job matcher / scorer (Module 2: matcher.py)  ← DONE
   Phase 3  — CV tailor (Module 3: cv_tailor.py)           ← DONE
-  Phase 4  — Answer generator (Module 4: answer_gen.py)
-  Phase 5  — Review Gate UI (Module 5: review_gate.py)    ← DONE
+  Phase 4  — Answer generator (Module 4: answer_gen.py)   ← on-demand at submit time
+  Phase 5  — Review Gate UI (Module 5: review_gate.py)    ← DONE (two-stage)
   Phase 6  — Form submitter (Module 6: submitter.py)      ← DONE
-  Phase 7  — Tracker / reporting (Module 7: tracker.py)  ← DONE
+  Phase 7  — Tracker / reporting (Module 7: tracker.py)   ← DONE
+
+Daily workflow:
+  1. python3 main.py --auto          → scrape + match → pending_stage_1
+  2. streamlit run modules/review_gate.py  → Stage 1 tab: approve/skip (no API cost)
+  3. python3 main.py --tailor        → tailor CVs for approved_stage_1 jobs → pending_stage_2
+  4. streamlit run modules/review_gate.py  → Stage 2 tab: review full content, approve
+  5. python3 -m modules.submitter --submit → submit approved jobs
+  6. python3 -m modules.tracker --update <id> <status>
 
 Usage:
-    python main.py                  # run the full pipeline
+    python main.py --auto           # scrape + match (stops before tailoring)
+    python main.py --tailor         # tailor CVs for Stage-1-approved jobs
     python main.py --phase scrape   # run a single phase by name
     python main.py --status         # print current pipeline status
+    python main.py --skip-scrape    # use with --auto to skip scraping
 """
 
 import argparse
@@ -35,7 +45,7 @@ from database import initialise_database, get_connection
 
 
 # ---------------------------------------------------------------------------
-# Phase stubs — each will be replaced by the real module import in later phases
+# Phase functions
 # ---------------------------------------------------------------------------
 
 def phase_scrape() -> None:
@@ -51,25 +61,25 @@ def phase_match() -> None:
     from modules.matcher import run_match
     print("Running matcher...")
     stats = run_match()
-    print(f"  Pending review: {stats['matched']}  |  Filtered out: {stats['filtered_out']}")
+    print(f"  Pending Stage 1: {stats['matched']}  |  Filtered out: {stats['filtered_out']}")
 
 
 def phase_tailor_cv() -> None:
-    """Phase 3: Tailor CV for each approved job."""
+    """Phase 3: Tailor CV for each approved_stage_1 job."""
     from modules.cv_tailor import run_tailor
     stats = run_tailor()
     print(f"  OK: {stats['ok']}  Warnings: {stats['warnings']}  Fallbacks: {stats['fallbacks']}  Failed: {stats['failed']}")
 
 
 def phase_generate_answers() -> None:
-    """Phase 4: Classify form questions and generate answers."""
+    """Phase 4: Classify form questions and generate answers (on-demand at submit time)."""
     from modules.answer_gen import run_answer_gen
     print("[Phase 4] Answer Generator — call run_answer_gen(job_id, fields) per application.")
 
 
 def phase_review_gate() -> None:
     """Phase 5: Launch Streamlit Review Gate for human approval."""
-    import subprocess, sys
+    import subprocess
     subprocess.run([sys.executable, "-m", "streamlit", "run",
                     str(Path(__file__).parent / "modules" / "review_gate.py")])
 
@@ -79,7 +89,7 @@ def phase_submit() -> None:
     from modules.submitter import run_submit
     print("Running submitter (dry-run by default)...")
     stats = run_submit(dry_run=True)
-    print(f"  Dry run OK: {stats.get('dry_run_ok',0)}  Blocked: {stats.get('blocked',0)}  Failed: {stats.get('failed',0)}")
+    print(f"  Dry run OK: {stats.get('dry_run_ok', 0)}  Blocked: {stats.get('blocked', 0)}  Failed: {stats.get('failed', 0)}")
 
 
 def phase_track() -> None:
@@ -89,82 +99,188 @@ def phase_track() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Automated pipeline (scrape → match → tailor → digest)
+# Pipeline constants (read from job_board_targeting.json if present)
 # ---------------------------------------------------------------------------
 
-JOB_CAP          = 10    # max jobs tailored per auto run (highest score first)
-TAILOR_SCORE_MIN = 0.60  # only tailor CVs for jobs at or above this match score
+JOB_CAP = 10    # max jobs shown in Stage 1 per run (highest score first)
 
+
+# ---------------------------------------------------------------------------
+# Queue promotion — bring top queued jobs back to pending_stage_1
+# ---------------------------------------------------------------------------
+
+def _promote_queued_jobs(conn) -> int:
+    """
+    At the start of each run, check if there are slots available in Stage 1.
+    If the current pending_stage_1 count is below JOB_CAP, promote the highest-scoring
+    queued jobs to fill the remaining slots.
+    Returns the number of jobs promoted.
+    """
+    current_stage1 = conn.execute(
+        "SELECT COUNT(*) FROM jobs WHERE status = 'pending_stage_1'"
+    ).fetchone()[0]
+
+    slots_available = JOB_CAP - current_stage1
+    if slots_available <= 0:
+        return 0
+
+    queued_ids = [
+        row["id"] for row in conn.execute(
+            """SELECT id FROM jobs
+               WHERE status = 'queued'
+               ORDER BY match_score DESC
+               LIMIT ?""",
+            (slots_available,)
+        ).fetchall()
+    ]
+
+    if not queued_ids:
+        return 0
+
+    placeholders = ",".join("?" * len(queued_ids))
+    conn.execute(
+        f"UPDATE jobs SET status = 'pending_stage_1' WHERE id IN ({placeholders})",
+        queued_ids
+    )
+    conn.commit()
+    return len(queued_ids)
+
+
+# ---------------------------------------------------------------------------
+# Cap enforcement — after matching, keep top JOB_CAP in stage_1, queue the rest
+# ---------------------------------------------------------------------------
+
+def _apply_job_cap(conn) -> int:
+    """
+    If more than JOB_CAP jobs are in pending_stage_1, demote the lowest-scoring
+    ones to 'queued' so the Stage 1 Review Gate shows at most JOB_CAP jobs.
+    Returns the number of jobs queued.
+    """
+    all_stage1 = conn.execute(
+        """SELECT id FROM jobs
+           WHERE status = 'pending_stage_1'
+           ORDER BY match_score DESC"""
+    ).fetchall()
+
+    if len(all_stage1) <= JOB_CAP:
+        return 0
+
+    overflow_ids = [row["id"] for row in all_stage1[JOB_CAP:]]
+    placeholders = ",".join("?" * len(overflow_ids))
+    conn.execute(
+        f"UPDATE jobs SET status = 'queued' WHERE id IN ({placeholders})",
+        overflow_ids
+    )
+    conn.commit()
+    return len(overflow_ids)
+
+
+# ---------------------------------------------------------------------------
+# Automated pipeline — scrape + match only (stops before tailoring)
+# ---------------------------------------------------------------------------
 
 def run_auto_pipeline(skip_scrape: bool = False) -> None:
     """
-    Runs the fully automated portion of the pipeline:
-      1. Scrape new jobs
-      2. Match / score
-      3. Tailor CVs (top JOB_CAP jobs scoring >= TAILOR_SCORE_MIN only)
-      4. Print daily digest
+    Automated portion of the pipeline: scrape → match → stage_1 queue.
 
-    Answers and cover letters are NOT generated here.
-    They are generated on-the-fly by the submitter when it encounters
-    the real fields on each application form.
+    Stops BEFORE tailoring — no API calls made here.
+    Human opens the Review Gate (Stage 1 tab) to approve which jobs to tailor.
+    Then runs: python3 main.py --tailor
 
-    Human steps (Review Gate + Submit) are NOT run here — open them manually.
+    Answers and cover letters are generated on-the-fly at submission time.
     """
-    from modules.scraper   import run_scrape
-    from modules.matcher   import run_match
-    from modules.cv_tailor import run_tailor
-    from modules.tracker   import generate_digest, auto_update_no_response
-    from database import get_connection
+    from modules.scraper import run_scrape
+    from modules.matcher import run_match
+    from modules.tracker import generate_digest, auto_update_no_response
 
     print("\n" + "=" * 56)
-    print("  AUTO PIPELINE — starting")
+    print("  AUTO PIPELINE — scrape + match")
     print("=" * 56)
+
+    conn = get_connection()
+
+    # 0. Promote any queued jobs from previous runs
+    promoted = _promote_queued_jobs(conn)
+    if promoted:
+        print(f"\n[0] Promoted {promoted} queued job(s) back to Stage 1.")
+    conn.close()
 
     # 1. Scrape
     if not skip_scrape:
-        print("\n[1/3] Scraping jobs...")
+        print("\n[1/2] Scraping jobs...")
         stats = run_scrape(priority="high")
         print(f"  Inserted: {stats['inserted']}  Duplicates: {stats['skipped_dup']}  Filtered: {stats['filtered_out']}")
     else:
-        print("\n[1/3] Scrape skipped.")
+        print("\n[1/2] Scrape skipped.")
 
-    # 2. Match
-    print("\n[2/3] Matching and scoring...")
+    # 2. Match → sets status to pending_stage_1 for qualifying jobs
+    print("\n[2/2] Matching and scoring...")
     stats = run_match()
-    print(f"  Pending review: {stats['matched']}  Filtered out: {stats['filtered_out']}")
+    print(f"  New Stage 1 matches: {stats['matched']}  Filtered out: {stats['filtered_out']}")
 
-    # 3. Tailor CVs — top JOB_CAP jobs scoring >= TAILOR_SCORE_MIN, no CV yet
-    print(f"\n[3/3] Tailoring CVs (score >= {TAILOR_SCORE_MIN}, top {JOB_CAP})...")
-    conn_t = get_connection()
-    high_score_ids = [
-        row["id"] for row in conn_t.execute(
-            """SELECT id FROM jobs
-               WHERE status = 'pending_review'
-                 AND match_score >= ?
-                 AND (match_notes IS NULL OR match_notes NOT LIKE '%PDF:%')
-               ORDER BY match_score DESC
-               LIMIT ?""",
-            (TAILOR_SCORE_MIN, JOB_CAP)
-        ).fetchall()
-    ]
-    conn_t.close()
+    # Apply cap: top JOB_CAP stay as pending_stage_1, rest become queued
+    conn = get_connection()
+    queued = _apply_job_cap(conn)
+    stage1_count = conn.execute(
+        "SELECT COUNT(*) FROM jobs WHERE status = 'pending_stage_1'"
+    ).fetchone()[0]
+    conn.close()
 
-    if high_score_ids:
-        tailor_stats = run_tailor(job_ids=high_score_ids)
-        print(f"  OK: {tailor_stats['ok']}  Warnings: {tailor_stats['warnings']}  Failed: {tailor_stats['failed']}")
-    else:
-        print("  No new jobs need CV tailoring.")
+    if queued:
+        print(f"  Cap applied: {queued} job(s) queued for next run (showing top {JOB_CAP})")
 
-    # 4. Auto-update no_response + digest
+    # Auto-update no_response + digest
     auto_update_no_response()
     print("\n" + generate_digest())
 
     print("\n" + "=" * 56)
     print("  NEXT STEPS")
     print("=" * 56)
-    print("  Review applications:  streamlit run modules/review_gate.py")
-    print("  Submit approved jobs: python3 -m modules.submitter --submit")
+    print(f"  {stage1_count} job(s) awaiting Stage 1 review.")
+    print("  1. Open Review Gate:  streamlit run modules/review_gate.py")
+    print("     → Stage 1 tab: approve jobs to tailor (no API cost here)")
+    print("  2. Tailor CVs:        python3 main.py --tailor")
+    print("  3. Review Gate again: Stage 2 tab — check tailored CVs + approve")
+    print("  4. Submit:            python3 -m modules.submitter --submit")
     print("=" * 56 + "\n")
+
+
+# ---------------------------------------------------------------------------
+# Tailor pipeline — tailor CVs for Stage-1-approved jobs only
+# ---------------------------------------------------------------------------
+
+def run_tailor_pipeline() -> None:
+    """
+    Tailor CVs for all jobs approved at Stage 1 (status='approved_stage_1').
+    After tailoring, jobs move to status='pending_stage_2'.
+    """
+    from modules.cv_tailor import run_tailor
+
+    conn = get_connection()
+    count = conn.execute(
+        "SELECT COUNT(*) FROM jobs WHERE status = 'approved_stage_1'"
+    ).fetchone()[0]
+    conn.close()
+
+    if count == 0:
+        print("\nNo jobs approved at Stage 1. Open the Review Gate → Stage 1 tab first.")
+        print("  streamlit run modules/review_gate.py\n")
+        return
+
+    print(f"\n{'=' * 56}")
+    print(f"  TAILOR PIPELINE — {count} job(s) to tailor")
+    print(f"{'=' * 56}\n")
+
+    stats = run_tailor()
+
+    print(f"\n{'=' * 56}")
+    print("  TAILORING COMPLETE")
+    print(f"{'=' * 56}")
+    print(f"  OK: {stats['ok']}  Warnings: {stats['warnings']}  Fallbacks: {stats['fallbacks']}  Failed: {stats['failed']}")
+    print("\n  NEXT STEPS")
+    print("  Open Review Gate → Stage 2 tab to review tailored CVs:")
+    print("  streamlit run modules/review_gate.py")
+    print(f"{'=' * 56}\n")
 
 
 PHASES = {
@@ -193,12 +309,27 @@ def print_status() -> None:
     """).fetchall()
     conn.close()
 
+    # Display order that makes pipeline sense
+    STATUS_ORDER = [
+        "pending_stage_1", "approved_stage_1", "queued",
+        "pending_stage_2", "approved",
+        "in_progress", "submitted", "interview",
+        "no_response", "rejected", "withdrawn",
+        "skipped_stage_1", "skipped_stage_2", "filtered_out", "scraped",
+    ]
+    status_map = {row["status"]: row["count"] for row in rows}
+
     print("\n=== Pipeline Status ===")
     if not rows:
         print("  No jobs in database yet.")
     else:
-        for row in rows:
-            print(f"  {row['status']:<20} {row['count']:>4} jobs")
+        for s in STATUS_ORDER:
+            if s in status_map:
+                print(f"  {s:<22} {status_map[s]:>4} jobs")
+        # Any unexpected statuses
+        for s, count in status_map.items():
+            if s not in STATUS_ORDER:
+                print(f"  {s:<22} {count:>4} jobs")
     print()
 
 
@@ -213,16 +344,15 @@ def startup_checks() -> bool:
     """
     print("Running startup checks...")
 
-    # 1. Config files
     loaders = [
-        ("personal_data_vault", personal_data),
-        ("answer_bank",         answer_bank),
-        ("tone_voice_guide",    tone_voice),
-        ("target_profile",      target_profile),
-        ("cv_tailoring_prompt", cv_tailoring_prompt),
+        ("personal_data_vault",           personal_data),
+        ("answer_bank",                   answer_bank),
+        ("tone_voice_guide",              tone_voice),
+        ("target_profile",                target_profile),
+        ("cv_tailoring_prompt",           cv_tailoring_prompt),
         ("question_classification_rules", question_classification_rules),
-        ("review_gate_ux",      review_gate_ux),
-        ("job_board_targeting", job_board_targeting),
+        ("review_gate_ux",                review_gate_ux),
+        ("job_board_targeting",           job_board_targeting),
     ]
     for name, loader in loaders:
         try:
@@ -233,7 +363,6 @@ def startup_checks() -> bool:
 
     print("  OK  All 8 config files loaded.")
 
-    # 2. Database
     try:
         initialise_database()
         conn = get_connection()
@@ -244,7 +373,6 @@ def startup_checks() -> bool:
         print(f"  FAIL Database — {e}")
         return False
 
-    # 3. Template files
     templates_dir = Path(__file__).parent / "templates"
     for f in ["cv_template_modern_clean.html", "render_cv.js"]:
         if not (templates_dir / f).exists():
@@ -289,7 +417,12 @@ def main() -> None:
     parser.add_argument(
         "--auto",
         action="store_true",
-        help="Run the automated pipeline: scrape → match → tailor → answers → digest.",
+        help="Run scrape + match → jobs queued for Stage 1 Review Gate. No API calls.",
+    )
+    parser.add_argument(
+        "--tailor",
+        action="store_true",
+        help="Tailor CVs for Stage-1-approved jobs → moves to Stage 2 Review Gate.",
     )
     parser.add_argument(
         "--skip-scrape",
@@ -310,6 +443,10 @@ def main() -> None:
 
     if args.auto:
         run_auto_pipeline(skip_scrape=args.skip_scrape)
+        return
+
+    if args.tailor:
+        run_tailor_pipeline()
         return
 
     if args.phase:

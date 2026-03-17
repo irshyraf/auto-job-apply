@@ -189,35 +189,51 @@ def _generate_tier4(question_label: str, story: dict, job: dict) -> str:
     cfg = question_classification_rules()["tier_4_rules"]["answer_generation"]
     tv  = tone_voice()
 
-    system_prompt = cfg["system_prompt"]
-    user_prompt = f"""## QUESTION
-{question_label}
+    # Stable prefix (cached): tone guide + task instructions — identical for every Tier 4 call
+    stable_prefix = (
+        "## TONE GUIDE (key rules — never violate)\n"
+        + json.dumps(tv.get("never_do", []), indent=2)
+        + "\n\n## TASK\n"
+        "Write a 150-250 word answer using the STAR story provided below. "
+        "Natural STAR structure — no mechanical headers. "
+        "Keep Aafreen's warm, grounded voice. Never fabricate. Use the story as written."
+    )
 
-## SELECTED STAR STORY (ID: {story['story_id']} — {story['title']})
-
-Situation: {story['situation']}
-Task: {story['task']}
-Action: {story['action']}
-Result: {story['result']}
-
-## JOB CONTEXT
-Title: {job.get('job_title', '')}
-Company: {job.get('company_name', '')}
-JD excerpt (first 600 chars): {(job.get('description_text') or '')[:600]}
-
-## TONE GUIDE (key rules)
-{json.dumps(tv.get('never_do', []), indent=2)}
-
-Write a 150-250 word answer using this story. Natural STAR structure — no mechanical headers.
-Keep Aafreen's warm, grounded voice. Never fabricate. Use the story as written."""
+    # Variable part: specific question + selected story + job context
+    variable_part = (
+        f"## QUESTION\n{question_label}\n\n"
+        f"## SELECTED STAR STORY (ID: {story['story_id']} — {story['title']})\n\n"
+        f"Situation: {story['situation']}\n"
+        f"Task: {story['task']}\n"
+        f"Action: {story['action']}\n"
+        f"Result: {story['result']}\n\n"
+        f"## JOB CONTEXT\n"
+        f"Title: {job.get('job_title', '')}\n"
+        f"Company: {job.get('company_name', '')}\n"
+        f"JD excerpt (first 600 chars): {(job.get('description_text') or '')[:600]}"
+    )
 
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     msg = client.messages.create(
         model=cfg["model"],
         max_tokens=cfg["max_tokens"],
         temperature=cfg["temperature"],
-        system=system_prompt,
-        messages=[{"role": "user", "content": user_prompt}],
+        system=[{
+            "type": "text",
+            "text": cfg["system_prompt"],
+            "cache_control": {"type": "ephemeral"},
+        }],
+        messages=[{"role": "user", "content": [
+            {
+                "type": "text",
+                "text": stable_prefix,
+                "cache_control": {"type": "ephemeral"},
+            },
+            {
+                "type": "text",
+                "text": variable_part,
+            },
+        ]}],
     )
     return msg.content[0].text.strip()
 
@@ -234,40 +250,54 @@ def _generate_tier3(question_label: str, job: dict, char_limit: int | None = Non
 
     word_guidance = cfg["word_count_short_field"] if (char_limit and char_limit < 500) else cfg["word_count_default"]
 
-    # Build a compact CV summary for context
+    # Build a compact CV summary for context (stable — always the same person)
     wh = vault["work_history"]
     cv_summary = "\n".join([
         f"- {r['job_title']} @ {r['company']}, {r['dates']}: {'; '.join(r['key_achievements'][:3])}"
         for r in wh
     ])
 
-    user_prompt = f"""## QUESTION
-{question_label}
+    # Stable prefix (cached): CV summary + tone rules — identical for every Tier 3 call
+    stable_prefix = (
+        "## CANDIDATE CV SUMMARY\n"
+        + cv_summary
+        + "\n\n## TONE RULES (never do)\n"
+        + json.dumps(tv.get("never_do", []), indent=2)
+    )
 
-## JOB
-Title: {job.get('job_title', '')}
-Company: {job.get('company_name', '')}
-Location: {job.get('location', '')}
-JD (first 600 chars): {(job.get('description_text') or '')[:600]}
-
-## COMPANY DOSSIER
-{job.get('company_dossier') or 'Not available.'}
-
-## CANDIDATE CV SUMMARY
-{cv_summary}
-
-## TONE RULES (never do)
-{json.dumps(tv.get('never_do', []), indent=2)}
-
-Write a {word_guidance} answer. Warm, specific, genuine. Not template-sounding."""
+    # Variable part: specific question + job details
+    variable_part = (
+        f"## QUESTION\n{question_label}\n\n"
+        f"## JOB\n"
+        f"Title: {job.get('job_title', '')}\n"
+        f"Company: {job.get('company_name', '')}\n"
+        f"Location: {job.get('location', '')}\n"
+        f"JD (first 600 chars): {(job.get('description_text') or '')[:600]}\n\n"
+        f"## COMPANY DOSSIER\n{job.get('company_dossier') or 'Not available.'}\n\n"
+        f"Write a {word_guidance} answer. Warm, specific, genuine. Not template-sounding."
+    )
 
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     msg = client.messages.create(
         model=cfg["model"],
         max_tokens=cfg["max_tokens"],
         temperature=cfg["temperature"],
-        system=cfg["system_prompt"],
-        messages=[{"role": "user", "content": user_prompt}],
+        system=[{
+            "type": "text",
+            "text": cfg["system_prompt"],
+            "cache_control": {"type": "ephemeral"},
+        }],
+        messages=[{"role": "user", "content": [
+            {
+                "type": "text",
+                "text": stable_prefix,
+                "cache_control": {"type": "ephemeral"},
+            },
+            {
+                "type": "text",
+                "text": variable_part,
+            },
+        ]}],
     )
     return msg.content[0].text.strip()
 
@@ -290,33 +320,48 @@ def generate_cover_letter(job: dict) -> str:
 
     cl_rules = tv.get("cover_letter_rules", {})
 
-    user_prompt = f"""## JOB
-Title: {job.get('job_title', '')}
-Company: {job.get('company_name', '')}
-Location: {job.get('location', '')}
-JD: {(job.get('description_text') or '')[:800]}
+    # Stable prefix (cached): CV summary + cover letter rules + tone guide + instruction
+    stable_prefix = (
+        "## CANDIDATE CV\n"
+        + cv_summary
+        + "\n\n## COVER LETTER RULES\n"
+        + json.dumps(cl_rules, indent=2)
+        + "\n\n## TONE GUIDE (never do)\n"
+        + json.dumps(tv.get("never_do", []), indent=2)
+        + "\n\nWrite the cover letter now. Under 300 words. 3-4 paragraphs."
+    )
 
-## COMPANY DOSSIER
-{job.get('company_dossier') or 'Not available.'}
-
-## CANDIDATE CV
-{cv_summary}
-
-## COVER LETTER RULES
-{json.dumps(cl_rules, indent=2)}
-
-## TONE GUIDE (never do)
-{json.dumps(tv.get('never_do', []), indent=2)}
-
-Write the cover letter now. Under 300 words. 3-4 paragraphs."""
+    # Variable part: job details
+    variable_part = (
+        f"## JOB\n"
+        f"Title: {job.get('job_title', '')}\n"
+        f"Company: {job.get('company_name', '')}\n"
+        f"Location: {job.get('location', '')}\n"
+        f"JD: {(job.get('description_text') or '')[:800]}\n\n"
+        f"## COMPANY DOSSIER\n{job.get('company_dossier') or 'Not available.'}"
+    )
 
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     msg = client.messages.create(
         model=cfg["model"],
         max_tokens=cfg["max_tokens"],
         temperature=cfg["temperature"],
-        system=cfg["system_prompt"],
-        messages=[{"role": "user", "content": user_prompt}],
+        system=[{
+            "type": "text",
+            "text": cfg["system_prompt"],
+            "cache_control": {"type": "ephemeral"},
+        }],
+        messages=[{"role": "user", "content": [
+            {
+                "type": "text",
+                "text": stable_prefix,
+                "cache_control": {"type": "ephemeral"},
+            },
+            {
+                "type": "text",
+                "text": variable_part,
+            },
+        ]}],
     )
     return msg.content[0].text.strip()
 

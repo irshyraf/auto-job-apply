@@ -1,9 +1,21 @@
 {
   "_meta": {
     "name": "Question Classification Rules — Module 4 Configuration",
-    "version": "1.0",
+    "version": "1.1",
     "created": "2026-03-16",
+    "updated": "2026-03-17",
     "description": "Rules for classifying application form questions into Tiers 1-4 and routing them to the correct answer source. Also includes cover letter generation rules."
+  },
+
+  "cost_controls": {
+    "prompt_caching": {
+      "enabled": true,
+      "applies_to": "All Tier 3, Tier 4, and cover letter API calls",
+      "what_to_cache": "System prompt + tone_voice_guide + answer_bank (for Tier 4). These are identical across every call in a batch. Use automatic cache_control.",
+      "expected_savings": "~70% of input tokens become cache reads at 10% of base price"
+    },
+    "batch_processing": "Process all approved applications' questions in a single batch session to maximise cache hit rates. Do not make isolated one-off API calls.",
+    "skip_if_unnecessary": "If an application form has ONLY Tier 1-2 questions and no cover letter field, make ZERO API calls for that application. The vault handles everything."
   },
 
   "classification_overview": {
@@ -191,7 +203,7 @@
       "what makes you a good fit"
     ],
     "answer_generation": {
-      "model": "claude-haiku-4-5-20251001",
+      "model": "claude-sonnet-4-20250514",
       "max_tokens": 500,
       "temperature": 0.4,
       "inputs": ["tailored_cv", "job_description", "company_dossier", "tone_voice_guide"],

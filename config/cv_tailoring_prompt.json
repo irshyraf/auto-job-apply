@@ -24,9 +24,15 @@
 
   "api_config": {
     "model": "claude-sonnet-4-20250514",
-    "max_tokens": 2500,
+    "max_tokens": 4000,
     "temperature": 0.3,
-    "_notes": "Low temperature for consistency. Sonnet is the right cost/quality balance for text rewriting. Opus would be overkill for this task."
+    "prompt_caching": {
+      "enabled": true,
+      "cache_control": "automatic",
+      "what_to_cache": "The system_prompt is identical across all API calls and should be cached. The tone_voice_guide and base CV variant data are also stable within a batch and should be included in the cached prefix.",
+      "expected_savings": "~70% of input tokens become cache reads at 10% of the base input price. Reduces per-application cost from ~$0.09 to ~$0.04-0.07."
+    },
+    "_notes": "Sonnet for quality. Prompt caching is critical for cost control. Process applications in batches (not one-at-a-time) to maximise cache hit rate."
   },
 
   "validation_checks": {

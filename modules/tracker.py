@@ -45,16 +45,21 @@ ACTIVE_STATUSES    = ("submitted", "in_progress")
 TERMINAL_STATUSES  = ("interview", "rejected", "no_response", "withdrawn")
 
 STATUS_LABELS = {
-    "scraped":        "🔍 Scraped",
-    "filtered_out":   "🚫 Filtered out",
-    "pending_review": "⏳ Pending review",
-    "approved":       "✅ Approved",
-    "in_progress":    "⚙️  In progress",
-    "submitted":      "📤 Submitted",
-    "no_response":    "😶 No response",
-    "interview":      "🎉 Interview",
-    "rejected":       "❌ Rejected",
-    "withdrawn":      "↩️  Withdrawn",
+    "scraped":          "🔍 Scraped",
+    "filtered_out":     "🚫 Filtered out",
+    "pending_stage_1":  "👁  Stage 1 — new matches",
+    "approved_stage_1": "⚙️  Queued for tailoring",
+    "skipped_stage_1":  "⏭  Skipped at Stage 1",
+    "queued":           "🗂  Queued (next run)",
+    "pending_stage_2":  "📝 Stage 2 — review content",
+    "skipped_stage_2":  "⏭  Skipped at Stage 2",
+    "approved":         "✅ Approved",
+    "in_progress":      "⚙️  In progress",
+    "submitted":        "📤 Submitted",
+    "no_response":      "😶 No response",
+    "interview":        "🎉 Interview",
+    "rejected":         "❌ Rejected",
+    "withdrawn":        "↩️  Withdrawn",
 }
 
 # ---------------------------------------------------------------------------
@@ -82,11 +87,14 @@ def auto_update_no_response() -> int:
     return updated
 
 
+MANUAL_STATUSES = {"submitted", "in_progress", "no_response", "interview", "rejected", "withdrawn"}
+
+
 def update_status(job_id: int, new_status: str) -> bool:
-    """Manually set the status of a job. Returns True on success."""
-    allowed = set(STATUS_LABELS.keys())
-    if new_status not in allowed:
-        print(f"Unknown status '{new_status}'. Allowed: {sorted(allowed)}")
+    """Manually set the status of a job. Returns True on success.
+    Only allows terminal/response statuses — cannot bypass the review gate."""
+    if new_status not in MANUAL_STATUSES:
+        print(f"Unknown status '{new_status}'. Allowed: {sorted(MANUAL_STATUSES)}")
         return False
     conn = get_connection()
     conn.execute("UPDATE jobs SET status=? WHERE id=?", (new_status, job_id))
@@ -176,8 +184,13 @@ def generate_digest() -> str:
     # Pipeline funnel
     lines.append("\nPIPELINE FUNNEL")
     lines.append("-" * 30)
-    order = ["scraped","filtered_out","pending_review","approved",
-             "in_progress","submitted","no_response","interview","rejected","withdrawn"]
+    order = [
+        "pending_stage_1", "approved_stage_1", "queued",
+        "pending_stage_2", "approved",
+        "in_progress", "submitted", "no_response", "interview",
+        "rejected", "withdrawn",
+        "skipped_stage_1", "skipped_stage_2", "filtered_out", "scraped",
+    ]
     for status in order:
         n = counts.get(status, 0)
         if n > 0:
@@ -291,7 +304,7 @@ def run_dashboard() -> None:
     total_interviews = counts.get("interview", 0)
     total_rejected   = counts.get("rejected", 0)
     total_noresponse = counts.get("no_response", 0)
-    pending          = counts.get("pending_review", 0)
+    pending = counts.get("pending_stage_1", 0) + counts.get("pending_stage_2", 0)
 
     m = st.columns(5)
     for col, (num, lbl) in zip(m, [
@@ -375,9 +388,11 @@ def run_dashboard() -> None:
     with tab_funnel:
         st.markdown("### Full Pipeline")
         order = [
-            "scraped", "filtered_out", "pending_review", "approved",
+            "pending_stage_1", "approved_stage_1", "queued",
+            "pending_stage_2", "approved",
             "in_progress", "submitted", "no_response", "interview",
             "rejected", "withdrawn",
+            "skipped_stage_1", "skipped_stage_2", "filtered_out", "scraped",
         ]
         total = sum(counts.values()) or 1
         for status in order:
@@ -396,7 +411,7 @@ def run_dashboard() -> None:
         active_rows = conn.execute("""
             SELECT id, job_title, company_name, status
             FROM jobs
-            WHERE status NOT IN ('scraped','filtered_out')
+            WHERE status NOT IN ('scraped','filtered_out','pending_stage_1','approved_stage_1','queued','pending_stage_2','skipped_stage_1','skipped_stage_2')
             ORDER BY submitted_at DESC NULLS LAST
             LIMIT 50
         """).fetchall()

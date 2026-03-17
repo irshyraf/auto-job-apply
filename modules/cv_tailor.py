@@ -1,14 +1,14 @@
 """
 cv_tailor.py — Phase 3: CV Tailoring
 
-For each job with status='pending_review':
+For each job with status='approved_stage_1':
   1. Build a base CV JSON from personal_data_vault.json for the selected variant
   2. Call Claude Sonnet with the system prompt from cv_tailoring_prompt.json
   3. Validate the response (7 checks from spec)
   4. On failure: retry once, then use base CV unmodified
   5. Write validated JSON to a temp file, call `node render_cv.js` to produce a PDF
   6. Save PDF to output/<Company>_<Title>_<YYYY-MM-DD>.pdf
-  7. Update job row: status remains 'pending_review' (Review Gate approves), pdf path logged in match_notes
+  7. Update job row: status → 'pending_stage_2', pdf path logged in match_notes
 
 Hard rules enforced here:
   - NEVER fabricate (bullet source check)
@@ -18,7 +18,7 @@ Hard rules enforced here:
   - Contact line never changes
 
 Usage:
-    python3 -m modules.cv_tailor                   # tailor all pending_review jobs
+    python3 -m modules.cv_tailor                   # tailor all approved_stage_1 jobs
     python3 -m modules.cv_tailor --job-id 4        # tailor a single job by DB id
 """
 
@@ -155,14 +155,18 @@ def _build_base_cv_json(variant: str) -> dict:
 # ---------------------------------------------------------------------------
 
 def _call_claude(system_prompt: str, user_prompt: str) -> str:
-    """Call Claude Sonnet and return the raw text response."""
+    """Call Claude Sonnet with prompt caching on the stable system prompt."""
     cfg = cv_tailoring_prompt()["api_config"]
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     message = client.messages.create(
         model=cfg["model"],
         max_tokens=cfg["max_tokens"],
         temperature=cfg["temperature"],
-        system=system_prompt,
+        system=[{
+            "type": "text",
+            "text": system_prompt,
+            "cache_control": {"type": "ephemeral"},
+        }],
         messages=[{"role": "user", "content": user_prompt}],
     )
     return message.content[0].text.strip()
@@ -411,7 +415,7 @@ def tailor_job(job: dict) -> dict:
 
 def run_tailor(job_ids: list[int] | None = None) -> dict:
     """
-    Tailor CVs for all jobs with status='pending_review', or a specific subset.
+    Tailor CVs for all jobs with status='approved_stage_1', or a specific subset.
     Returns {"ok": int, "warnings": int, "fallbacks": int, "failed": int}
     """
     conn = get_connection()
@@ -423,7 +427,7 @@ def run_tailor(job_ids: list[int] | None = None) -> dict:
         ).fetchall()
     else:
         rows = conn.execute(
-            "SELECT * FROM jobs WHERE status = 'pending_review'"
+            "SELECT * FROM jobs WHERE status = 'approved_stage_1'"
         ).fetchall()
 
     if not rows:
@@ -456,13 +460,13 @@ def run_tailor(job_ids: list[int] | None = None) -> dict:
             stats["failed"] += 1
             label = "FAILED"
 
-        # Store PDF path in match_notes (Review Gate reads it from there)
+        # Store PDF path in match_notes and advance status to pending_stage_2
         if result["pdf_path"]:
             write_conn = get_connection()
             existing_notes = job.get("match_notes") or ""
             new_notes = f"{existing_notes} | PDF: {result['pdf_path']}"
             write_conn.execute(
-                "UPDATE jobs SET match_notes=? WHERE id=?",
+                "UPDATE jobs SET match_notes=?, status='pending_stage_2' WHERE id=?",
                 (new_notes.strip(" |"), job["id"])
             )
             write_conn.commit()

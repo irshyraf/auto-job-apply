@@ -109,14 +109,16 @@
   },
 
   "scrape_schedule": {
-    "frequency": "Every 6 hours for Tier 1 boards. Every 12 hours for Tier 2 boards.",
+    "frequency": "Once daily for all boards. Single comprehensive sweep.",
     "schedule": {
-      "cycle_1": "06:00 — Tier 1 (LinkedIn, Indeed, Reed) + high priority queries",
-      "cycle_2": "12:00 — Tier 1 + medium priority queries",
-      "cycle_3": "18:00 — Tier 1 + Tier 2 + all query tiers",
-      "cycle_4": "00:00 — Tier 1 + high priority queries (overnight catch)"
+      "daily_run": "08:00 — All Tier 1 boards + Tier 2 boards. All query tiers. This catches overnight and early morning postings."
     },
-    "notes": "New listings typically appear in the morning (employers post at 9-10am). The 06:00 and 12:00 cycles catch these. The 18:00 cycle is the most comprehensive sweep."
+    "job_cap": {
+      "max_new_matches_per_run": 10,
+      "behaviour": "After scraping, filtering, deduplication, and matching, the system takes the TOP 10 matches by match score and stops. Remaining matches are stored in the database as 'queued' and promoted in the next run if slots are available.",
+      "rationale": "Hard cap to control API costs. At ~$0.04-0.07 per tailored application (Sonnet + prompt caching), 10 jobs/day keeps monthly spend within £10-15 budget."
+    },
+    "notes": "The single daily run at 08:00 catches the majority of new postings. Employers typically post between 9am-5pm, so the next morning's sweep captures a full day of new listings. Queued matches roll forward automatically."
   },
 
   "filters": {
@@ -154,7 +156,7 @@
       "description_text": "Full job description text",
       "date_posted": "Extracted or scraped date",
       "date_scraped": "Timestamp of when we found it",
-      "status": "new | matched | researched | tailored | pending_review | approved | submitted | skipped | expired",
+      "status": "new | matched | researched | pending_stage_1 | approved_stage_1 | tailored | pending_stage_2 | approved | submitted | skipped_stage_1 | skipped_stage_2 | expired | queued",
       "match_score": "Calculated by matching engine (0-100)",
       "dedup_hash": "Hash of company + title + location"
     }
