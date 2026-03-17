@@ -32,7 +32,7 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from database import get_connection
+from database import get_connection, calculate_api_cost, log_api_usage
 
 try:
     from dotenv import load_dotenv
@@ -150,7 +150,8 @@ def _ensure_cover_letter(job_id: int, job: dict) -> str | None:
     # Not yet generated — generate now
     print(f"  Generating cover letter for job {job_id}...")
     from modules.answer_gen import generate_cover_letter, save_answer
-    text = generate_cover_letter(job)
+    from config_loader import question_classification_rules
+    text, usage = generate_cover_letter(job)
     if text:
         conn2 = get_connection()
         save_answer(conn2, job_id, {
@@ -162,6 +163,23 @@ def _ensure_cover_letter(job_id: int, job: dict) -> str | None:
             "needs_review":  1,
             "flagged":       0,
         })
+        # Log API usage for on-the-fly cover letter generation
+        if usage:
+            cost = calculate_api_cost(
+                input_tokens=usage["input_tokens"],
+                output_tokens=usage["output_tokens"],
+                cache_creation_tokens=usage["cache_creation_input_tokens"],
+                cache_read_tokens=usage["cache_read_input_tokens"],
+                model=question_classification_rules()["cover_letter_rules"]["generation_config"]["model"]
+            )
+            log_api_usage(
+                job_id=job_id,
+                module="answer_gen",
+                call_type="cover_letter",
+                input_tokens=usage["input_tokens"],
+                output_tokens=usage["output_tokens"],
+                cost_usd=cost
+            )
         conn2.commit()
         conn2.close()
     return text
@@ -376,15 +394,33 @@ async def generic_fill_form(
         answer = _match_answer(label, answers)
         if not answer:
             # Generate on-the-fly for this specific field
-            from modules.answer_gen import classify_and_answer, _save_answer
-            generated = classify_and_answer(label, input_type, job, char_limit=None)
+            from modules.answer_gen import classify_and_answer, save_answer
+            from config_loader import question_classification_rules
+            generated, usage = classify_and_answer(label, input_type, job, char_limit=None)
             if generated and generated.get("flagged"):
                 log.append(f"  BLOCKED  [{label[:50]}] flagged — manual required")
                 stats["skipped"] += 1
                 continue
             if generated and generated.get("answer_text"):
                 conn_g = get_connection()
-                _save_answer(conn_g, job["id"], generated)
+                save_answer(conn_g, job["id"], generated)
+                # Log API usage for on-the-fly answer generation
+                if usage and generated.get("tier") in (3, 4):
+                    cost = calculate_api_cost(
+                        input_tokens=usage["input_tokens"],
+                        output_tokens=usage["output_tokens"],
+                        cache_creation_tokens=usage["cache_creation_input_tokens"],
+                        cache_read_tokens=usage["cache_read_input_tokens"],
+                        model=question_classification_rules()[f"tier_{generated['tier']}_rules"]["answer_generation"]["model"]
+                    )
+                    log_api_usage(
+                        job_id=job["id"],
+                        module="answer_gen",
+                        call_type=f"tier{generated['tier']}",
+                        input_tokens=usage["input_tokens"],
+                        output_tokens=usage["output_tokens"],
+                        cost_usd=cost
+                    )
                 conn_g.commit()
                 conn_g.close()
                 answers.append(generated)
@@ -414,15 +450,33 @@ async def generic_fill_form(
             continue
         answer = _match_answer(label, answers)
         if not answer:
-            from modules.answer_gen import classify_and_answer, _save_answer
-            generated = classify_and_answer(label, "textarea", job, char_limit=None)
+            from modules.answer_gen import classify_and_answer, save_answer
+            from config_loader import question_classification_rules
+            generated, usage = classify_and_answer(label, "textarea", job, char_limit=None)
             if generated and generated.get("flagged"):
                 log.append(f"  BLOCKED  [{label[:50]}] flagged — manual required")
                 stats["skipped"] += 1
                 continue
             if generated and generated.get("answer_text"):
                 conn_g = get_connection()
-                _save_answer(conn_g, job["id"], generated)
+                save_answer(conn_g, job["id"], generated)
+                # Log API usage for on-the-fly answer generation
+                if usage and generated.get("tier") in (3, 4):
+                    cost = calculate_api_cost(
+                        input_tokens=usage["input_tokens"],
+                        output_tokens=usage["output_tokens"],
+                        cache_creation_tokens=usage["cache_creation_input_tokens"],
+                        cache_read_tokens=usage["cache_read_input_tokens"],
+                        model=question_classification_rules()[f"tier_{generated['tier']}_rules"]["answer_generation"]["model"]
+                    )
+                    log_api_usage(
+                        job_id=job["id"],
+                        module="answer_gen",
+                        call_type=f"tier{generated['tier']}",
+                        input_tokens=usage["input_tokens"],
+                        output_tokens=usage["output_tokens"],
+                        cost_usd=cost
+                    )
                 conn_g.commit()
                 conn_g.close()
                 answers.append(generated)

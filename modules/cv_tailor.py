@@ -34,7 +34,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from config_loader import cv_tailoring_prompt, personal_data
-from database import get_connection
+from database import get_connection, calculate_api_cost, log_api_usage
 
 try:
     from dotenv import load_dotenv
@@ -144,8 +144,10 @@ def _build_base_cv_json(variant: str) -> dict:
 # Claude API call
 # ---------------------------------------------------------------------------
 
-def _call_claude(system_prompt: str, user_prompt: str) -> str:
-    """Call Claude Sonnet with prompt caching on the stable system prompt."""
+def _call_claude(system_prompt: str, user_prompt: str) -> tuple[str, dict]:
+    """Call Claude Sonnet with prompt caching on the stable system prompt.
+    Returns (response_text, usage_dict) where usage_dict contains token counts.
+    """
     cfg = cv_tailoring_prompt()["api_config"]
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     message = client.messages.create(
@@ -159,7 +161,14 @@ def _call_claude(system_prompt: str, user_prompt: str) -> str:
         }],
         messages=[{"role": "user", "content": user_prompt}],
     )
-    return message.content[0].text.strip()
+    # Extract usage info from the response
+    usage = {
+        "input_tokens": message.usage.input_tokens,
+        "output_tokens": message.usage.output_tokens,
+        "cache_creation_input_tokens": getattr(message.usage, "cache_creation_input_tokens", 0),
+        "cache_read_input_tokens": getattr(message.usage, "cache_read_input_tokens", 0),
+    }
+    return message.content[0].text.strip(), usage
 
 
 # ---------------------------------------------------------------------------
@@ -343,11 +352,12 @@ def tailor_job(job: dict) -> dict:
 
     cv_json = None
     violations = []
+    usage_data = None
 
     # --- Attempt 1 ---
     for attempt in (1, 2):
         try:
-            raw = _call_claude(system_prompt, user_prompt)
+            raw, usage_data = _call_claude(system_prompt, user_prompt)
             # Strip markdown code fences if Claude added them
             raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.MULTILINE)
             raw = re.sub(r"\s*```$", "", raw, flags=re.MULTILINE)
@@ -366,6 +376,23 @@ def tailor_job(job: dict) -> dict:
         violations = ["json_invalid: fell back to base CV"]
         status = "fallback"
     else:
+        # Log API usage for successful call
+        if usage_data:
+            cost = calculate_api_cost(
+                input_tokens=usage_data["input_tokens"],
+                output_tokens=usage_data["output_tokens"],
+                cache_creation_tokens=usage_data["cache_creation_input_tokens"],
+                cache_read_tokens=usage_data["cache_read_input_tokens"],
+                model=cv_tailoring_prompt()["api_config"]["model"]
+            )
+            log_api_usage(
+                job_id=job["id"],
+                module="cv_tailor",
+                call_type="tailor",
+                input_tokens=usage_data["input_tokens"],
+                output_tokens=usage_data["output_tokens"],
+                cost_usd=cost
+            )
         violations = _validate(cv_json, base_cv, original_contact)
 
         # Auto-fix: too many bullets

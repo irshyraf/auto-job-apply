@@ -26,7 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from config_loader import answer_bank, personal_data, question_classification_rules, tone_voice
-from database import get_connection
+from database import get_connection, calculate_api_cost, log_api_usage
 
 try:
     from dotenv import load_dotenv
@@ -184,8 +184,10 @@ def _select_story(question_label: str) -> dict:
     return best_story
 
 
-def _generate_tier4(question_label: str, story: dict, job: dict) -> str:
-    """Call Claude to adapt the chosen STAR story to this specific question."""
+def _generate_tier4(question_label: str, story: dict, job: dict) -> tuple[str, dict]:
+    """Call Claude to adapt the chosen STAR story to this specific question.
+    Returns (answer_text, usage_dict) where usage_dict contains token counts.
+    """
     cfg = question_classification_rules()["tier_4_rules"]["answer_generation"]
     tv  = tone_voice()
 
@@ -235,15 +237,23 @@ def _generate_tier4(question_label: str, story: dict, job: dict) -> str:
             },
         ]}],
     )
-    return msg.content[0].text.strip()
+    usage = {
+        "input_tokens": msg.usage.input_tokens,
+        "output_tokens": msg.usage.output_tokens,
+        "cache_creation_input_tokens": getattr(msg.usage, "cache_creation_input_tokens", 0),
+        "cache_read_input_tokens": getattr(msg.usage, "cache_read_input_tokens", 0),
+    }
+    return msg.content[0].text.strip(), usage
 
 
 # ---------------------------------------------------------------------------
 # Tier 3 — role-specific AI answer
 # ---------------------------------------------------------------------------
 
-def _generate_tier3(question_label: str, job: dict, char_limit: int | None = None) -> str:
-    """Call Claude to generate a role-specific answer."""
+def _generate_tier3(question_label: str, job: dict, char_limit: int | None = None) -> tuple[str, dict]:
+    """Call Claude to generate a role-specific answer.
+    Returns (answer_text, usage_dict) where usage_dict contains token counts.
+    """
     cfg = question_classification_rules()["tier_3_rules"]["answer_generation"]
     tv  = tone_voice()
     vault = personal_data()
@@ -299,15 +309,23 @@ def _generate_tier3(question_label: str, job: dict, char_limit: int | None = Non
             },
         ]}],
     )
-    return msg.content[0].text.strip()
+    usage = {
+        "input_tokens": msg.usage.input_tokens,
+        "output_tokens": msg.usage.output_tokens,
+        "cache_creation_input_tokens": getattr(msg.usage, "cache_creation_input_tokens", 0),
+        "cache_read_input_tokens": getattr(msg.usage, "cache_read_input_tokens", 0),
+    }
+    return msg.content[0].text.strip(), usage
 
 
 # ---------------------------------------------------------------------------
 # Cover letter generation
 # ---------------------------------------------------------------------------
 
-def generate_cover_letter(job: dict) -> str:
-    """Generate a full cover letter for this job using Claude."""
+def generate_cover_letter(job: dict) -> tuple[str, dict]:
+    """Generate a full cover letter for this job using Claude.
+    Returns (cover_letter_text, usage_dict) where usage_dict contains token counts.
+    """
     cfg  = question_classification_rules()["cover_letter_rules"]["generation_config"]
     tv   = tone_voice()
     vault = personal_data()
@@ -363,7 +381,13 @@ def generate_cover_letter(job: dict) -> str:
             },
         ]}],
     )
-    return msg.content[0].text.strip()
+    usage = {
+        "input_tokens": msg.usage.input_tokens,
+        "output_tokens": msg.usage.output_tokens,
+        "cache_creation_input_tokens": getattr(msg.usage, "cache_creation_input_tokens", 0),
+        "cache_read_input_tokens": getattr(msg.usage, "cache_read_input_tokens", 0),
+    }
+    return msg.content[0].text.strip(), usage
 
 
 # ---------------------------------------------------------------------------
@@ -375,36 +399,37 @@ def classify_and_answer(
     field_type: str,
     job: dict,
     char_limit: int | None = None,
-) -> dict:
+) -> tuple[dict, dict | None]:
     """
     Run the full 5-step pipeline for a single form field.
-    Returns a dict ready to INSERT into application_answers.
+    Returns (answer_dict, usage_dict) where usage_dict is non-None only for Tier 3/4.
+    answer_dict is ready to INSERT into application_answers.
     """
     source_board = job.get("source_board", "")
 
     # Step 1 — Special rules (visa expiry, criminal, disability, equality)
     result = _classify_special(label)
     if result:
-        return {**result, "field_name": label, "field_type": field_type,
-                "story_id": None, "competency_tags": None}
+        return ({**result, "field_name": label, "field_type": field_type,
+                "story_id": None, "competency_tags": None}, None)
 
     # Step 2 — Tier 1 factual
     result = _classify_tier1(label, source_board)
     if result:
-        return {**result, "field_name": label, "field_type": field_type,
-                "story_id": None, "competency_tags": None}
+        return ({**result, "field_name": label, "field_type": field_type,
+                "story_id": None, "competency_tags": None}, None)
 
     # Step 3 — Tier 2 common screening
     result = _classify_tier2(label, source_board)
     if result:
-        return {**result, "field_name": label, "field_type": field_type,
-                "story_id": None, "competency_tags": None}
+        return ({**result, "field_name": label, "field_type": field_type,
+                "story_id": None, "competency_tags": None}, None)
 
     # Step 4 — Tier 4 competency/STAR
     if _matches_tier4_trigger(label):
         story = _select_story(label)
-        answer_text = _generate_tier4(label, story, job)
-        return {
+        answer_text, usage = _generate_tier4(label, story, job)
+        return ({
             "field_name":      label,
             "field_type":      field_type,
             "tier":            4,
@@ -414,11 +439,11 @@ def classify_and_answer(
             "competency_tags": json.dumps(story["competency_tags"]),
             "needs_review":    1,
             "flagged":         0,
-        }
+        }, usage)
 
     # Step 5 — Tier 3 fallback (role-specific AI)
-    answer_text = _generate_tier3(label, job, char_limit)
-    return {
+    answer_text, usage = _generate_tier3(label, job, char_limit)
+    return ({
         "field_name":      label,
         "field_type":      field_type,
         "tier":            3,
@@ -428,7 +453,7 @@ def classify_and_answer(
         "competency_tags": None,
         "needs_review":    1,
         "flagged":         0,
-    }
+    }, usage)
 
 
 # ---------------------------------------------------------------------------
@@ -486,8 +511,26 @@ def run_answer_gen(
         field_type = field.get("field_type", "text_long")
         char_limit = field.get("char_limit")
 
-        answer = classify_and_answer(label, field_type, job, char_limit)
+        answer, usage = classify_and_answer(label, field_type, job, char_limit)
         save_answer(conn, job_id, answer)
+
+        # Log API usage for Tier 3 and Tier 4 answers
+        if usage and answer["tier"] in (3, 4):
+            cost = calculate_api_cost(
+                input_tokens=usage["input_tokens"],
+                output_tokens=usage["output_tokens"],
+                cache_creation_tokens=usage["cache_creation_input_tokens"],
+                cache_read_tokens=usage["cache_read_input_tokens"],
+                model=question_classification_rules()[f"tier_{answer['tier']}_rules"]["answer_generation"]["model"]
+            )
+            log_api_usage(
+                job_id=job_id,
+                module="answer_gen",
+                call_type=f"tier{answer['tier']}",
+                input_tokens=usage["input_tokens"],
+                output_tokens=usage["output_tokens"],
+                cost_usd=cost
+            )
 
         tier = answer["tier"]
         stats[f"t{tier}"] += 1
@@ -506,7 +549,7 @@ def run_answer_gen(
     # Cover letter
     if want_cover_letter:
         print("  Generating cover letter...")
-        cl_text = generate_cover_letter(job)
+        cl_text, cl_usage = generate_cover_letter(job)
         save_answer(conn, job_id, {
             "field_name":      "cover_letter",
             "field_type":      "cover_letter",
@@ -518,6 +561,23 @@ def run_answer_gen(
             "needs_review":    1,
             "flagged":         0,
         })
+        # Log API usage for cover letter
+        if cl_usage:
+            cost = calculate_api_cost(
+                input_tokens=cl_usage["input_tokens"],
+                output_tokens=cl_usage["output_tokens"],
+                cache_creation_tokens=cl_usage["cache_creation_input_tokens"],
+                cache_read_tokens=cl_usage["cache_read_input_tokens"],
+                model=question_classification_rules()["cover_letter_rules"]["generation_config"]["model"]
+            )
+            log_api_usage(
+                job_id=job_id,
+                module="answer_gen",
+                call_type="cover_letter",
+                input_tokens=cl_usage["input_tokens"],
+                output_tokens=cl_usage["output_tokens"],
+                cost_usd=cost
+            )
         stats["cover_letter"] = True
         print(f"  Cover letter generated ({len(cl_text.split())} words)\n")
 

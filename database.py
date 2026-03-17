@@ -162,6 +162,39 @@ def initialise_database() -> None:
     print(f"Database initialised at: {DB_PATH}")
 
 
+def calculate_api_cost(
+    input_tokens: int,
+    output_tokens: int,
+    cache_creation_tokens: int = 0,
+    cache_read_tokens: int = 0,
+    model: str = "claude-sonnet-4-20250514"
+) -> float:
+    """
+    Calculate API cost in USD for a Claude API call.
+
+    Claude Sonnet 4 pricing (as of March 2026):
+    - Regular input: $3 per 1M tokens
+    - Cache creation: $3.75 per 1M tokens (25% surcharge)
+    - Cache read: $0.30 per 1M tokens (90% discount)
+    - Output: $15 per 1M tokens
+    """
+    if model not in ("claude-sonnet-4-20250514", "claude-sonnet-4.1-20250514"):
+        model = "claude-sonnet-4-20250514"  # default
+
+    # All our models use Sonnet pricing
+    INPUT_COST_PER_M = 3.0
+    CACHE_CREATION_COST_PER_M = 3.75
+    CACHE_READ_COST_PER_M = 0.30
+    OUTPUT_COST_PER_M = 15.0
+
+    regular_input_cost = (input_tokens - cache_creation_tokens - cache_read_tokens) * (INPUT_COST_PER_M / 1_000_000)
+    cache_creation_cost = cache_creation_tokens * (CACHE_CREATION_COST_PER_M / 1_000_000)
+    cache_read_cost = cache_read_tokens * (CACHE_READ_COST_PER_M / 1_000_000)
+    output_cost = output_tokens * (OUTPUT_COST_PER_M / 1_000_000)
+
+    return round(regular_input_cost + cache_creation_cost + cache_read_cost + output_cost, 4)
+
+
 def log_api_usage(job_id: int | None, module: str, call_type: str,
                   input_tokens: int, output_tokens: int, cost_usd: float) -> None:
     """Insert one row into api_usage_log. Called after every Claude API call."""
