@@ -28,6 +28,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from datetime import date
 from pathlib import Path
 
@@ -62,9 +63,11 @@ def _contact_line() -> str:
     vault = personal_data()
     p = vault["personal"]
     links = vault["links"]
+    linkedin = links["linkedin"].replace("https://", "").replace("http://", "").rstrip("/")
+    portfolio = links["portfolio"].replace("https://", "").replace("http://", "").rstrip("/")
     return (
         f"{p['email']}  ·  {p['phone']}  ·  {p['city']}  ·  "
-        f"linkedin.com/in/aafreen-fathima-846870265  ·  aafreenfathimacouk.wordpress.com"
+        f"{linkedin}  ·  {portfolio}"
     )
 
 
@@ -94,26 +97,13 @@ def _build_base_cv_json(variant: str) -> dict:
     wh = vault["work_history"]
     roles = [
         {
-            "company":  wh[0]["company"],
-            "title":    wh[0]["job_title"],
-            "location": wh[0]["location"],
-            "dates":    wh[0]["dates"],
-            "bullets":  wh[0]["key_achievements"],
-        },
-        {
-            "company":  wh[1]["company"],
-            "title":    wh[1]["job_title"],
-            "location": wh[1]["location"],
-            "dates":    wh[1]["dates"],
-            "bullets":  wh[1]["key_achievements"],
-        },
-        {
-            "company":  wh[2]["company"],
-            "title":    wh[2]["job_title"],
-            "location": wh[2]["location"],
-            "dates":    wh[2]["dates"],
-            "bullets":  wh[2]["key_achievements"],
-        },
+            "company":  entry["company"],
+            "title":    entry["job_title"],
+            "location": entry["location"],
+            "dates":    entry["dates"],
+            "bullets":  entry["key_achievements"],
+        }
+        for entry in wh
     ]
 
     # Extras
@@ -366,6 +356,8 @@ def tailor_job(job: dict) -> dict:
         except (json.JSONDecodeError, Exception) as e:
             print(f"    Attempt {attempt} failed: {e}")
             cv_json = None
+            if attempt == 1:
+                time.sleep(3)
 
     # --- Fallback to base CV if both attempts failed ---
     if cv_json is None:
@@ -418,6 +410,10 @@ def run_tailor(job_ids: list[int] | None = None) -> dict:
     Tailor CVs for all jobs with status='approved_stage_1', or a specific subset.
     Returns {"ok": int, "warnings": int, "fallbacks": int, "failed": int}
     """
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        print("[ERROR] ANTHROPIC_API_KEY is not set. Check your .env file.")
+        return {"ok": 0, "warnings": 0, "fallbacks": 0, "failed": 0}
+
     conn = get_connection()
 
     if job_ids:

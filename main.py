@@ -73,8 +73,7 @@ def phase_tailor_cv() -> None:
 
 def phase_generate_answers() -> None:
     """Phase 4: Classify form questions and generate answers (on-demand at submit time)."""
-    from modules.answer_gen import run_answer_gen
-    print("[Phase 4] Answer Generator — call run_answer_gen(job_id, fields) per application.")
+    print("[Phase 4] Answer Generator — run from the Streamlit UI or call run_answer_gen(job_id, fields) directly.")
 
 
 def phase_review_gate() -> None:

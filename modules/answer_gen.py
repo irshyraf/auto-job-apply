@@ -435,7 +435,7 @@ def classify_and_answer(
 # DB write
 # ---------------------------------------------------------------------------
 
-def _save_answer(conn, job_id: int, answer: dict) -> None:
+def save_answer(conn, job_id: int, answer: dict) -> None:
     conn.execute("""
         INSERT OR REPLACE INTO application_answers
             (job_id, field_name, field_type, tier, competency_tags,
@@ -487,7 +487,7 @@ def run_answer_gen(
         char_limit = field.get("char_limit")
 
         answer = classify_and_answer(label, field_type, job, char_limit)
-        _save_answer(conn, job_id, answer)
+        save_answer(conn, job_id, answer)
 
         tier = answer["tier"]
         stats[f"t{tier}"] += 1
@@ -507,7 +507,7 @@ def run_answer_gen(
     if want_cover_letter:
         print("  Generating cover letter...")
         cl_text = generate_cover_letter(job)
-        _save_answer(conn, job_id, {
+        save_answer(conn, job_id, {
             "field_name":      "cover_letter",
             "field_type":      "cover_letter",
             "tier":            3,

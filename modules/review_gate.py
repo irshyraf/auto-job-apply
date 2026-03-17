@@ -149,11 +149,13 @@ st.markdown("""
 
 def load_jobs_by_status(status: str, sort_by: str = "match_score DESC") -> list[dict]:
     conn = get_connection()
-    order = {
+    _safe_orders = {
         "Match score (highest first)": "match_score DESC",
         "Newest first":                "date_scraped DESC",
         "Simplest first":              "(SELECT COUNT(*) FROM application_answers a WHERE a.job_id=jobs.id AND a.needs_review=1) ASC, match_score DESC",
-    }.get(sort_by, "match_score DESC")
+    }
+    order = _safe_orders.get(sort_by, "match_score DESC")
+    assert order in _safe_orders.values(), f"Unsafe ORDER BY value: {order!r}"
     rows = conn.execute(
         f"SELECT * FROM jobs WHERE status=? ORDER BY {order}", (status,)
     ).fetchall()
@@ -715,9 +717,11 @@ def main() -> None:
         stage2_jobs = load_jobs_by_status("pending_stage_2", sort_by)
 
         if not stage2_jobs:
-            s1a_count = get_connection().execute(
+            _conn = get_connection()
+            s1a_count = _conn.execute(
                 "SELECT COUNT(*) FROM jobs WHERE status='approved_stage_1'"
             ).fetchone()[0]
+            _conn.close()
             if s1a_count:
                 st.info(f"⚙️ {s1a_count} job(s) approved at Stage 1. Run `python3 main.py --tailor` to generate CVs.")
             else:

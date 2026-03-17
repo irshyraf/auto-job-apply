@@ -149,11 +149,11 @@ def _ensure_cover_letter(job_id: int, job: dict) -> str | None:
 
     # Not yet generated — generate now
     print(f"  Generating cover letter for job {job_id}...")
-    from modules.answer_gen import generate_cover_letter, _save_answer
+    from modules.answer_gen import generate_cover_letter, save_answer
     text = generate_cover_letter(job)
     if text:
         conn2 = get_connection()
-        _save_answer(conn2, job_id, {
+        save_answer(conn2, job_id, {
             "field_name":    "cover_letter",
             "field_type":    "cover_letter",
             "tier":          3,

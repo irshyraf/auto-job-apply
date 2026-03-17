@@ -275,42 +275,40 @@ def render() -> None:
 
             if st.session_state[f"edit_mode_{job_id}"]:
                 st.markdown("**Edit mode**")
-                edits_saved = False
-                for ans in answers:
-                    if ans["tier"] not in (3, 4) and not ans.get("flagged"):
-                        continue
+                editable_answers = [a for a in answers if a["tier"] in (3, 4) or a.get("flagged")]
+                for ans in editable_answers:
                     field = ans["field_name"]
-                    new_val = st.text_area(
+                    st.text_area(
                         field,
                         value=ans.get("answer_text") or "",
                         key=f"edit_{job_id}_{ans['id']}"
                     )
                     if ans.get("story_id"):
-                        save_to_bank = st.checkbox(
+                        st.checkbox(
                             "Save this version to your Answer Bank for future use",
                             key=f"bank_{job_id}_{ans['id']}"
                         )
-                    else:
-                        save_to_bank = False
-
-                    if new_val != (ans.get("answer_text") or ""):
-                        _save_answer_edit(ans["id"], new_val)
-                        if save_to_bank and ans.get("story_id"):
-                            _save_to_answer_bank(ans["story_id"], new_val)
-                        edits_saved = True
 
                 # Cover letter edit
+                cl_answers = []
                 if cover_letter:
                     cl_answers = [a for a in answers if a["field_name"] == "cover_letter"]
                     if cl_answers:
-                        new_cl = st.text_area("Cover letter", value=cover_letter, height=200, key=f"edit_cl_{job_id}")
-                        if new_cl != cover_letter:
-                            _save_answer_edit(cl_answers[0]["id"], new_cl)
-                            edits_saved = True
+                        st.text_area("Cover letter", value=cover_letter, height=200, key=f"edit_cl_{job_id}")
 
                 ecol1, ecol2 = st.columns(2)
                 with ecol1:
                     if st.button("Save", key=f"save_{job_id}", type="primary"):
+                        for ans in editable_answers:
+                            new_val = st.session_state.get(f"edit_{job_id}_{ans['id']}", ans.get("answer_text") or "")
+                            if new_val != (ans.get("answer_text") or ""):
+                                _save_answer_edit(ans["id"], new_val)
+                                if st.session_state.get(f"bank_{job_id}_{ans['id']}") and ans.get("story_id"):
+                                    _save_to_answer_bank(ans["story_id"], new_val)
+                        if cl_answers:
+                            new_cl = st.session_state.get(f"edit_cl_{job_id}", cover_letter)
+                            if new_cl != cover_letter:
+                                _save_answer_edit(cl_answers[0]["id"], new_cl)
                         st.session_state[f"edit_mode_{job_id}"] = False
                         st.toast("Changes saved.", icon="✅")
                         st.rerun()

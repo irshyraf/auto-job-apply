@@ -248,10 +248,10 @@ def _scrape_via_jobspy(
     query: str,
     results_wanted: int = 50,
     hours_old: int = 72,
-) -> list[dict]:
+) -> tuple[list[dict], int]:
     """
     Run a single query against the given boards via JobSpy.
-    Returns a list of normalised job dicts ready for _insert_job().
+    Returns (jobs, filtered_count, error_count).
     """
     try:
         df = scrape_jobs(
@@ -267,12 +267,13 @@ def _scrape_via_jobspy(
         )
     except Exception as e:
         print(f"    JobSpy error ({query!r}): {e}")
-        return []
+        return [], 0, 1
 
     if df is None or df.empty:
-        return []
+        return [], 0, 0
 
     results = []
+    filtered_count = 0
     for _, row in df.iterrows():
         row = row.where(row.notna(), other=None).to_dict()
 
@@ -292,14 +293,19 @@ def _scrape_via_jobspy(
 
         # --- Post-scrape filters ---
         if not _is_location_valid(location, work_setup):
+            filtered_count += 1
             continue
         if _title_excluded(title):
+            filtered_count += 1
             continue
         if _description_excluded(description):
+            filtered_count += 1
             continue
         if _contract_type_excluded(job_type_raw):
+            filtered_count += 1
             continue
         if salary_min is not None and salary_min < SALARY_MINIMUM:
+            filtered_count += 1
             continue
 
         results.append({
@@ -318,22 +324,23 @@ def _scrape_via_jobspy(
             "company_sector":  str(row.get("company_industry") or "").strip() or None,
         })
 
-    return results
+    return results, filtered_count, 0
 
 
 # ---------------------------------------------------------------------------
 # Reed API scraper
 # ---------------------------------------------------------------------------
 
-def _scrape_reed(query: str, results_wanted: int = 50) -> list[dict]:
+def _scrape_reed(query: str, results_wanted: int = 50) -> tuple[list[dict], int, int]:
     """
     Scrape Reed using their public API.
     Requires REED_API_KEY environment variable (free at reed.co.uk/developers).
     Falls back gracefully if key is not set.
+    Returns (jobs, filtered_count, error_count).
     """
     api_key = os.environ.get("REED_API_KEY", "")
     if not api_key:
-        return []  # Key not configured — skip silently
+        return [], 0, 0  # Key not configured — skip silently
 
     base_url = "https://www.reed.co.uk/api/1.0/search"
     params = {
@@ -357,9 +364,10 @@ def _scrape_reed(query: str, results_wanted: int = 50) -> list[dict]:
         data = resp.json()
     except Exception as e:
         print(f"    Reed API error ({query!r}): {e}")
-        return []
+        return [], 0, 1
 
     results = []
+    filtered_count = 0
     for item in data.get("results", []):
         title = str(item.get("jobTitle") or "").strip()
         company = str(item.get("employerName") or "").strip()
@@ -372,8 +380,10 @@ def _scrape_reed(query: str, results_wanted: int = 50) -> list[dict]:
         if not title or not company:
             continue
         if _title_excluded(title):
+            filtered_count += 1
             continue
         if _description_excluded(description):
+            filtered_count += 1
             continue
 
         try:
@@ -383,6 +393,7 @@ def _scrape_reed(query: str, results_wanted: int = 50) -> list[dict]:
             salary_min = salary_max = None
 
         if salary_min is not None and salary_min < SALARY_MINIMUM:
+            filtered_count += 1
             continue
 
         # Reed doesn't surface work_from_home info directly — scan description
@@ -409,7 +420,7 @@ def _scrape_reed(query: str, results_wanted: int = 50) -> list[dict]:
             "company_sector":  None,
         })
 
-    return results
+    return results, filtered_count, 0
 
 
 # ---------------------------------------------------------------------------
@@ -467,24 +478,32 @@ def run_scrape(
 
         # JobSpy boards
         if jobspy_boards:
-            jobs = _scrape_via_jobspy(jobspy_boards, query, results_per_query, hours_old)
+            jobs, filtered, err = _scrape_via_jobspy(jobspy_boards, query, results_per_query, hours_old)
+            stats["filtered_out"] += filtered
+            stats["errors"] += err
+            inserted_before = stats["inserted"]
             for job in jobs:
                 if _insert_job(conn, job):
                     stats["inserted"] += 1
                 else:
                     stats["skipped_dup"] += 1
-            print(f"    JobSpy → {len(jobs)} listings, {stats['inserted']} inserted so far")
+            inserted_this_query = stats["inserted"] - inserted_before
+            print(f"    JobSpy → {len(jobs)} passed filters, {inserted_this_query} new, {filtered} filtered out")
 
         # Reed API
         if use_reed:
-            reed_jobs = _scrape_reed(query, results_per_query)
+            reed_jobs, reed_filtered, reed_err = _scrape_reed(query, results_per_query)
+            stats["filtered_out"] += reed_filtered
+            stats["errors"] += reed_err
+            reed_inserted_before = stats["inserted"]
             for job in reed_jobs:
                 if _insert_job(conn, job):
                     stats["inserted"] += 1
                 else:
                     stats["skipped_dup"] += 1
-            if reed_jobs:
-                print(f"    Reed    → {len(reed_jobs)} listings")
+            if reed_jobs or reed_filtered:
+                reed_inserted_this = stats["inserted"] - reed_inserted_before
+                print(f"    Reed    → {len(reed_jobs)} passed filters, {reed_inserted_this} new, {reed_filtered} filtered out")
 
         # Polite delay between queries
         if i < len(queries):

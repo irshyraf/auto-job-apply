@@ -64,7 +64,7 @@ def _load_jobs(status_filter: list | None = None, search: str = "") -> list:
     query = """
         SELECT id, job_title, company_name, salary_min, salary_max,
                cv_variant_used, submitted_at, date_scraped, status,
-               match_notes, source_url, cover_letter_path
+               match_notes, source_url
         FROM jobs
     """
     params = []
@@ -148,11 +148,18 @@ def _jobs_to_csv(jobs: list) -> str:
 
 def _count_by_tab(search: str = "") -> dict:
     conn = get_connection()
-    query_base = "SELECT status, COUNT(*) as n FROM jobs"
     if search:
-        query_base += f" WHERE (LOWER(job_title) LIKE '%{search.lower()}%' OR LOWER(company_name) LIKE '%{search.lower()}%')"
-    query_base += " GROUP BY status"
-    rows = conn.execute(query_base).fetchall()
+        like_val = f"%{search.lower()}%"
+        rows = conn.execute(
+            "SELECT status, COUNT(*) as n FROM jobs "
+            "WHERE (LOWER(job_title) LIKE ? OR LOWER(company_name) LIKE ?) "
+            "GROUP BY status",
+            (like_val, like_val),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT status, COUNT(*) as n FROM jobs GROUP BY status"
+        ).fetchall()
     conn.close()
     counts = {r["status"]: r["n"] for r in rows}
     total = sum(counts.values())
