@@ -71,6 +71,13 @@ def phase_tailor_cv() -> None:
     print(f"  OK: {stats['ok']}  Warnings: {stats['warnings']}  Fallbacks: {stats['fallbacks']}  Failed: {stats['failed']}")
 
 
+def phase_research_companies() -> None:
+    """Phase 1.5: Research companies for each approved_stage_1 job."""
+    from modules.researcher import run_research
+    stats = run_research()
+    print(f"  OK: {stats['ok']}  Skipped: {stats['skipped']}  Failed: {stats['failed']}  BudgetExceeded: {stats['budget_exceeded']}")
+
+
 def phase_generate_answers() -> None:
     """Phase 4: Classify form questions and generate answers (on-demand at submit time)."""
     print("[Phase 4] Answer Generator — run from the Streamlit UI or call run_answer_gen(job_id, fields) directly.")
@@ -322,13 +329,14 @@ def run_scrape_and_match() -> dict:
 
 
 PHASES = {
-    "scrape":   phase_scrape,
-    "match":    phase_match,
-    "tailor":   phase_tailor_cv,
-    "answers":  phase_generate_answers,
-    "review":   phase_review_gate,
-    "submit":   phase_submit,
-    "track":    phase_track,
+    "scrape":    phase_scrape,
+    "match":     phase_match,
+    "research":  phase_research_companies,
+    "tailor":    phase_tailor_cv,
+    "answers":   phase_generate_answers,
+    "review":    phase_review_gate,
+    "submit":    phase_submit,
+    "track":     phase_track,
 }
 
 
@@ -463,6 +471,11 @@ def main() -> None:
         help="Tailor CVs for Stage-1-approved jobs → moves to Stage 2 Review Gate.",
     )
     parser.add_argument(
+        "--research",
+        action="store_true",
+        help="Research companies for Stage-1-approved jobs → populates dossier.",
+    )
+    parser.add_argument(
         "--skip-scrape",
         action="store_true",
         help="Use with --auto to skip scraping (re-process existing jobs only).",
@@ -485,6 +498,19 @@ def main() -> None:
 
     if args.tailor:
         run_tailor_pipeline()
+        return
+
+    if args.research:
+        from modules.researcher import run_research
+        print(f"\n{'=' * 56}")
+        print("  RESEARCH PIPELINE — company research")
+        print(f"{'=' * 56}\n")
+        stats = run_research()
+        print(f"\n{'=' * 56}")
+        print("  RESEARCH COMPLETE")
+        print(f"{'=' * 56}")
+        print(f"  OK: {stats['ok']}  Skipped: {stats['skipped']}  Failed: {stats['failed']}  BudgetExceeded: {stats['budget_exceeded']}")
+        print(f"{'=' * 56}\n")
         return
 
     if args.phase:

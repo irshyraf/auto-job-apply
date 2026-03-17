@@ -1,0 +1,167 @@
+FULL PIPELINE — START TO FINISH
+================================
+
+
+STEP 1 — Scrape + Match (no API cost)
+--------------------------------------
+Command: python3 main.py --auto
+
+- Scrapes LinkedIn, Indeed, Glassdoor, Google for new jobs
+- Filters: London only, permanent, salary >= £28K, no dealbreakers
+  (commission-only, IR35, fixed-term, internship, etc.), no senior titles
+- Scores each job (title match + salary + work setup + keywords)
+- Score < 0.40 -> filtered_out
+- Top 10 scoring jobs -> pending_stage_1
+- Anything beyond top 10 -> queued (auto-promoted next run)
+
+Zero API calls. Zero cost.
+
+
+STEP 1.5 — Company Research (~$0.01-0.02 per job, optional but recommended)
+--------------------------------------------------------------------------
+Command: python3 main.py --research
+
+Runs after --auto, before Stage 1 review.
+
+For each job with status approved_stage_1:
+  1. Playwright fetches company "About" page (headless Chrome, 8s timeout)
+  2. If scrape fails/empty -> falls back to JD text only
+  3. Claude Sonnet generates 2-3 sentence company dossier
+  4. Populates company_dossier and company_sector columns
+  5. Status unchanged (stays approved_stage_1)
+
+The dossier feeds into CV tailoring and cover letter generation for more
+personalized, company-aware content.
+
+~10 API calls (only if approved), ~$0.15 for 10 jobs
+(Falls back gracefully to free JD-only analysis if scraping fails)
+
+
+STEP 2 — Stage 1 Review (no API cost)
+---------------------------------------
+Command: streamlit run modules/review_gate.py
+         (open Stage 1 tab in browser)
+
+- Shows compact cards: job title, company, salary, match score, JD summary, link
+- "Queue for Tailoring" -> approved_stage_1
+- "Skip"               -> skipped_stage_1
+
+Zero API calls. Zero cost.
+
+
+STEP 3 — CV Tailoring (~$0.47 for 10 jobs)
+--------------------------------------------
+Command: python3 main.py --tailor
+
+Only processes jobs with status approved_stage_1.
+
+For each job:
+  1. Builds base CV JSON from your personal data vault
+     (correct variant: BD / Account Mgmt / Marketing / Sales / generic)
+  2. Calls Claude Sonnet with the JD — rewrites profile summary,
+     bullet points, and skills section
+  3. Validates: no fabrication, no USD, no CorelDraw, 11-16 bullets,
+     contact line unchanged
+  4. If validation fails: retries once, then falls back to base CV unmodified
+  5. Renders to PDF via node render_cv.js -> Chromium
+  6. PDF saved to output/
+  7. Uses company dossier (from Step 1.5) for more personalized tailoring
+
+Status -> pending_stage_2
+~10 API calls, ~$0.47
+
+
+STEP 4 — Stage 2 Review (no API cost)
+---------------------------------------
+Command: streamlit run modules/review_gate.py
+         (open Stage 2 tab in browser)
+
+- Full card: tailored CV download, all answers, cover letter preview
+- Edit any answer inline before approving
+- "Approve" -> approved
+- "Skip"    -> skipped_stage_2
+- Flagged answers (visa expiry etc.) block the Approve button entirely
+
+Zero API calls. Zero cost.
+
+
+STEP 5 — Submit (~$0.35 for 10 jobs)
+--------------------------------------
+Command: python3 -m modules.submitter --all --submit
+         (run directly in terminal — must type YES to confirm)
+
+Only processes jobs with status approved.
+
+For each job:
+  1. Status -> in_progress
+  2. Playwright opens application URL in headless Chrome
+  3. Detects ATS (Greenhouse, Lever, or generic fallback)
+  4. Fills form fields by matching labels against stored answers
+  5. If a field isn't in the DB -> generates answer on-the-fly via Claude
+     (Tier 3 or Tier 4 depending on question type)
+  6. If a cover letter field exists -> generates cover letter via Claude on-the-fly
+  7. If any field generates a flagged answer (e.g. visa expiry) ->
+     skips that job entirely, no submission
+  8. Takes screenshot before submit click
+  9. Clicks submit -> waits for confirmation page
+ 10. Status -> submitted, saves application reference
+ 11. If anything fails -> status reverts to approved for retry
+
+~40 API calls (only for fields not already answered), ~$0.35
+
+
+STEP 6 — Log Responses (no cost)
+----------------------------------
+Command: python3 -m modules.tracker --update <job_id> <status>
+
+Valid statuses: interview, rejected, no_response, withdrawn, in_progress, submitted
+
+View dashboard:
+  python3 -m modules.tracker --digest      # terminal summary
+  streamlit run modules/tracker.py         # full Streamlit dashboard
+
+
+COST SUMMARY (per 10-job run)
+==============================
+  Step 1 --auto                            $0.00
+  Step 1.5 --research (10 companies)      ~$0.15
+  Step 2 Stage 1 review                    $0.00
+  Step 3 --tailor (10 CVs)                ~$0.47
+  Step 4 Stage 2 review                    $0.00
+  Step 5 --submit (avg 3 AI fields + 1 CL) ~$0.35
+  -----------------------------------------------
+  Total per run                            ~$0.97
+
+  Monthly (22 weekday runs):               ~$21.00
+  Without prompt caching this would be:   ~$58.00/month
+
+
+STATUS FLOW
+============
+  scraped
+    -> pending_stage_1    (matched, awaiting Stage 1 review)
+    -> approved_stage_1   (approved at Stage 1, queued for CV tailoring)
+    -> skipped_stage_1    (rejected at Stage 1, no cost incurred)
+    -> queued             (matched but beyond cap of 10; auto-promoted next run)
+    -> pending_stage_2    (CV tailored, awaiting Stage 2 review)
+    -> approved           (approved at Stage 2, ready to submit)
+    -> skipped_stage_2    (rejected at Stage 2)
+    -> in_progress        (submission started)
+    -> submitted          (successfully submitted)
+    -> interview          (interview received)
+    -> no_response        (>14 days since submission, no reply)
+    -> rejected           (rejection received)
+    -> withdrawn          (manually withdrawn)
+    -> filtered_out       (auto-rejected by scraper filters or matcher)
+
+
+HARD RULES (non-negotiable)
+=============================
+  1. Never fabricate experience, skills, or qualifications
+  2. Never use USD — GBP only
+  3. Never include CorelDraw in CVs
+  4. Visa expiry question -> FLAG_FOR_MANUAL_REVIEW, never auto-fill, always block submission
+  5. CV must stay one page (11-16 bullets enforced)
+  6. Contact line must never change
+  7. Permanent roles only, London only
+  8. No commission-only, fixed-term, or sponsorship-required roles
