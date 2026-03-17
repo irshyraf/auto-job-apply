@@ -433,6 +433,8 @@ def run_tailor(job_ids: list[int] | None = None) -> dict:
 
     print(f"  Tailoring {len(rows)} job(s)...\n")
     stats = {"ok": 0, "warnings": 0, "fallbacks": 0, "failed": 0}
+    # Close connection before CPU/IO-heavy work (PDF render) to avoid lock contention
+    conn.close()
 
     for row in rows:
         job = dict(row)
@@ -456,13 +458,15 @@ def run_tailor(job_ids: list[int] | None = None) -> dict:
 
         # Store PDF path in match_notes (Review Gate reads it from there)
         if result["pdf_path"]:
+            write_conn = get_connection()
             existing_notes = job.get("match_notes") or ""
             new_notes = f"{existing_notes} | PDF: {result['pdf_path']}"
-            conn.execute(
+            write_conn.execute(
                 "UPDATE jobs SET match_notes=? WHERE id=?",
                 (new_notes.strip(" |"), job["id"])
             )
-            conn.commit()
+            write_conn.commit()
+            write_conn.close()
 
         print(f"    Status: {label} | PDF: {result['pdf_path']}")
         if result["violations"]:
@@ -470,7 +474,6 @@ def run_tailor(job_ids: list[int] | None = None) -> dict:
                 print(f"    ! {v}")
         print()
 
-    conn.close()
     return stats
 
 
