@@ -1,7 +1,7 @@
 """
 matcher.py — Phase 2b: Job Matching and Scoring
 
-Reads all jobs with status='scraped' from the database and scores each one
+Reads all jobs with status='new' from the database and scores each one
 using only rule-based logic (no Claude API calls in this phase).
 
 Scoring breakdown (max 1.0):
@@ -14,7 +14,7 @@ Scoring breakdown (max 1.0):
 After scoring:
   Dealbreaker detected  → status='filtered_out', dealbreaker_found=1
   match_score < 0.40    → status='filtered_out'
-  match_score >= 0.40   → status='pending_stage_1'
+  match_score >= 0.40   → status='matched'
 
 CV variant is selected from target_profile.json cv_variant_selection map.
 
@@ -232,19 +232,19 @@ def _score_job(job: dict) -> tuple[float, str]:
 
 def run_match() -> dict:
     """
-    Score all jobs with status='scraped'.
+    Score all jobs with status='new'.
     Returns {"matched": int, "filtered_out": int, "already_processed": int}
     """
     conn = get_connection()
 
     rows = conn.execute(
-        "SELECT * FROM jobs WHERE status = 'scraped'"
+        "SELECT * FROM jobs WHERE status = 'new'"
     ).fetchall()
 
     stats = {"matched": 0, "filtered_out": 0, "already_processed": 0}
 
     if not rows:
-        print("  No jobs with status='scraped' to process.")
+        print("  No jobs with status='new' to process.")
         conn.close()
         return stats
 
@@ -290,7 +290,7 @@ def run_match() -> dict:
 
         conn.execute("""
             UPDATE jobs
-            SET status='pending_stage_1',
+            SET status='matched',
                 match_score=?,
                 match_notes=?,
                 cv_variant_used=?

@@ -45,12 +45,14 @@ ACTIVE_STATUSES    = ("submitted", "in_progress")
 TERMINAL_STATUSES  = ("interview", "rejected", "no_response", "withdrawn")
 
 STATUS_LABELS = {
-    "scraped":          "🔍 Scraped",
+    "new":              "🔍 New",
+    "matched":          "📊 Matched",
     "filtered_out":     "🚫 Filtered out",
-    "pending_stage_1":  "👁  Stage 1 — new matches",
-    "approved_stage_1": "⚙️  Queued for tailoring",
+    "pending_stage_1":  "👁  Stage 1 — review matches",
+    "approved_stage_1": "⚙️  Approved for research/tailor",
     "skipped_stage_1":  "⏭  Skipped at Stage 1",
     "queued":           "🗂  Queued (next run)",
+    "researched":       "🏢 Researched",
     "pending_stage_2":  "📝 Stage 2 — review content",
     "skipped_stage_2":  "⏭  Skipped at Stage 2",
     "approved":         "✅ Approved",
@@ -88,6 +90,8 @@ def auto_update_no_response() -> int:
 
 
 MANUAL_STATUSES = {"submitted", "in_progress", "no_response", "interview", "rejected", "withdrawn"}
+# Pipeline statuses that are auto-set by the pipeline (cannot be manually set)
+PIPELINE_STATUSES = {"new", "matched", "pending_stage_1", "approved_stage_1", "researched", "pending_stage_2", "skipped_stage_1", "skipped_stage_2", "approved", "queued", "filtered_out"}
 
 
 def update_status(job_id: int, new_status: str) -> bool:
@@ -185,11 +189,11 @@ def generate_digest() -> str:
     lines.append("\nPIPELINE FUNNEL")
     lines.append("-" * 30)
     order = [
-        "pending_stage_1", "approved_stage_1", "queued",
-        "pending_stage_2", "approved",
+        "new", "matched", "pending_stage_1", "approved_stage_1", "queued",
+        "researched", "pending_stage_2", "approved",
         "in_progress", "submitted", "no_response", "interview",
         "rejected", "withdrawn",
-        "skipped_stage_1", "skipped_stage_2", "filtered_out", "scraped",
+        "skipped_stage_1", "skipped_stage_2", "filtered_out",
     ]
     for status in order:
         n = counts.get(status, 0)
@@ -388,11 +392,11 @@ def run_dashboard() -> None:
     with tab_funnel:
         st.markdown("### Full Pipeline")
         order = [
-            "pending_stage_1", "approved_stage_1", "queued",
-            "pending_stage_2", "approved",
+            "new", "matched", "pending_stage_1", "approved_stage_1", "queued",
+            "researched", "pending_stage_2", "approved",
             "in_progress", "submitted", "no_response", "interview",
             "rejected", "withdrawn",
-            "skipped_stage_1", "skipped_stage_2", "filtered_out", "scraped",
+            "skipped_stage_1", "skipped_stage_2", "filtered_out",
         ]
         total = sum(counts.values()) or 1
         for status in order:
@@ -411,7 +415,7 @@ def run_dashboard() -> None:
         active_rows = conn.execute("""
             SELECT id, job_title, company_name, status
             FROM jobs
-            WHERE status NOT IN ('scraped','filtered_out','pending_stage_1','approved_stage_1','queued','pending_stage_2','skipped_stage_1','skipped_stage_2')
+            WHERE status NOT IN ('new','matched','filtered_out','pending_stage_1','approved_stage_1','queued','researched','pending_stage_2','skipped_stage_1','skipped_stage_2')
             ORDER BY submitted_at DESC NULLS LAST
             LIMIT 50
         """).fetchall()

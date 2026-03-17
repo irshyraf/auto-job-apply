@@ -158,27 +158,39 @@ def _promote_queued_jobs(conn) -> int:
 
 def _apply_job_cap(conn) -> int:
     """
-    If more than JOB_CAP jobs are in pending_stage_1, demote the lowest-scoring
-    ones to 'queued' so the Stage 1 Review Gate shows at most JOB_CAP jobs.
-    Returns the number of jobs queued.
+    If more than JOB_CAP jobs are in 'matched' status, promote the top JOB_CAP to
+    'pending_stage_1' (for Stage 1 Review Gate), and demote the rest to 'queued'.
+    Returns the number of jobs promoted to pending_stage_1.
     """
-    all_stage1 = conn.execute(
+    all_matched = conn.execute(
         """SELECT id FROM jobs
-           WHERE status = 'pending_stage_1'
+           WHERE status = 'matched'
            ORDER BY match_score DESC"""
     ).fetchall()
 
-    if len(all_stage1) <= JOB_CAP:
+    if not all_matched:
         return 0
 
-    overflow_ids = [row["id"] for row in all_stage1[JOB_CAP:]]
-    placeholders = ",".join("?" * len(overflow_ids))
-    conn.execute(
-        f"UPDATE jobs SET status = 'queued' WHERE id IN ({placeholders})",
-        overflow_ids
-    )
+    # Promote top JOB_CAP to pending_stage_1
+    promote_ids = [row["id"] for row in all_matched[:JOB_CAP]]
+    if promote_ids:
+        placeholders = ",".join("?" * len(promote_ids))
+        conn.execute(
+            f"UPDATE jobs SET status = 'pending_stage_1' WHERE id IN ({placeholders})",
+            promote_ids
+        )
+
+    # Demote overflow to queued
+    if len(all_matched) > JOB_CAP:
+        overflow_ids = [row["id"] for row in all_matched[JOB_CAP:]]
+        placeholders = ",".join("?" * len(overflow_ids))
+        conn.execute(
+            f"UPDATE jobs SET status = 'queued' WHERE id IN ({placeholders})",
+            overflow_ids
+        )
+
     conn.commit()
-    return len(overflow_ids)
+    return len(promote_ids) if promote_ids else 0
 
 
 # ---------------------------------------------------------------------------
@@ -357,11 +369,11 @@ def print_status() -> None:
 
     # Display order that makes pipeline sense
     STATUS_ORDER = [
-        "pending_stage_1", "approved_stage_1", "queued",
-        "pending_stage_2", "approved",
+        "new", "matched", "pending_stage_1", "approved_stage_1", "queued",
+        "researched", "pending_stage_2", "approved",
         "in_progress", "submitted", "interview",
         "no_response", "rejected", "withdrawn",
-        "skipped_stage_1", "skipped_stage_2", "filtered_out", "scraped",
+        "skipped_stage_1", "skipped_stage_2", "filtered_out",
     ]
     status_map = {row["status"]: row["count"] for row in rows}
 

@@ -138,20 +138,24 @@ COST SUMMARY (per 10-job run)
 
 STATUS FLOW
 ============
-  scraped
-    -> pending_stage_1    (matched, awaiting Stage 1 review)
-    -> approved_stage_1   (approved at Stage 1, queued for CV tailoring)
-    -> skipped_stage_1    (rejected at Stage 1, no cost incurred)
-    -> queued             (matched but beyond cap of 10; auto-promoted next run)
-    -> pending_stage_2    (CV tailored, awaiting Stage 2 review)
+  new
+    -> matched            (scored ≥0.40, awaiting queue fill)
+    -> pending_stage_1    (in top 10 by score, awaiting Stage 1 human review)
+    -> approved_stage_1   (approved at Stage 1, queued for company research or direct tailor)
+    -> researched         (company research complete, awaiting CV tailoring)
+    -> pending_stage_2    (CV tailored, awaiting Stage 2 full content review)
     -> approved           (approved at Stage 2, ready to submit)
-    -> skipped_stage_2    (rejected at Stage 2)
     -> in_progress        (submission started)
     -> submitted          (successfully submitted)
     -> interview          (interview received)
     -> no_response        (>14 days since submission, no reply)
     -> rejected           (rejection received)
     -> withdrawn          (manually withdrawn)
+
+  Alternative paths:
+    -> skipped_stage_1    (rejected at Stage 1, no API cost incurred)
+    -> skipped_stage_2    (rejected at Stage 2 after tailoring)
+    -> queued             (matched but beyond cap of 10; auto-promoted next run)
     -> filtered_out       (auto-rejected by scraper filters or matcher)
 
 

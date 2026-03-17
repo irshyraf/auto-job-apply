@@ -215,6 +215,10 @@ def render() -> None:
             link_parts.append(f"[View job advert →]({url})")
             st.markdown("  ·  ".join(link_parts))
 
+            # Warning if CV tailoring failed (fallback to base CV)
+            if job.get("cv_tailoring_failed"):
+                st.warning("⚠️ **CV Tailoring Failed** — Claude returned invalid JSON. Showing base CV unmodified. Please review carefully before submitting.", icon="⚠️")
+
             # Tailored profile
             if profile:
                 st.markdown(f'<div class="profile-box">{profile}</div>', unsafe_allow_html=True)

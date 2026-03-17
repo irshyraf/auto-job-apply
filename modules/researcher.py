@@ -242,10 +242,18 @@ def research_job(job: dict) -> dict:
 
     # --- Write to DB ---
     conn = get_connection()
-    conn.execute(
-        "UPDATE jobs SET company_dossier=?, company_sector=? WHERE id=?",
-        (dossier, sector, job["id"])
-    )
+    # Set status='researched' only if research succeeded; failed/skipped jobs stay in current status
+    new_status = 'researched' if status == 'ok' else None
+    if new_status:
+        conn.execute(
+            "UPDATE jobs SET company_dossier=?, company_sector=?, status=? WHERE id=?",
+            (dossier, sector, new_status, job["id"])
+        )
+    else:
+        conn.execute(
+            "UPDATE jobs SET company_dossier=?, company_sector=? WHERE id=?",
+            (dossier, sector, job["id"])
+        )
     conn.commit()
     conn.close()
 

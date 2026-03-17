@@ -44,10 +44,13 @@ CARD_CSS = """
 """
 
 STATUS_BADGES = {
+    "new":             ('<span class="badge badge-grey">New</span>',),
+    "matched":         ('<span class="badge badge-yellow">Matched</span>',),
     "submitted":       ('<span class="badge badge-green">Submitted</span>',),
     "pending_stage_1": ('<span class="badge badge-amber">Stage 1 review</span>',),
     "pending_stage_2": ('<span class="badge badge-amber">Stage 2 review</span>',),
-    "approved_stage_1":('<span class="badge badge-blue">Tailoring…</span>',),
+    "approved_stage_1":('<span class="badge badge-blue">Approved S1</span>',),
+    "researched":      ('<span class="badge badge-yellow">Researched</span>',),
     "skipped_stage_1": ('<span class="badge badge-grey">Skipped</span>',),
     "skipped_stage_2": ('<span class="badge badge-grey">Skipped</span>',),
     "in_progress":     ('<span class="badge badge-blue">Submitting…</span>',),

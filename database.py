@@ -53,9 +53,11 @@ def initialise_database() -> None:
 
             -- Processing status
             -- Allowed values:
-            --   scraped           → just discovered by scraper
-            --   pending_stage_1   → matched, awaiting Stage 1 lightweight review
-            --   approved_stage_1  → approved at Stage 1, queued for CV tailoring
+            --   new               → just discovered by scraper
+            --   matched           → scored ≥0.40, awaiting Stage 1 queue
+            --   pending_stage_1   → in Stage 1 review queue, awaiting human approval
+            --   approved_stage_1  → approved at Stage 1, queued for company research or direct CV tailor
+            --   researched        → company research complete, awaiting CV tailoring
             --   skipped_stage_1   → rejected at Stage 1 (no API cost incurred)
             --   queued            → matched but beyond JOB_CAP; auto-promoted next run
             --   pending_stage_2   → tailored, awaiting Stage 2 full content review
@@ -68,7 +70,7 @@ def initialise_database() -> None:
             --   rejected          → rejected by employer
             --   withdrawn         → withdrawn by candidate
             --   filtered_out      → removed by automated filters (legacy)
-            status              TEXT    NOT NULL DEFAULT 'scraped',
+            status              TEXT    NOT NULL DEFAULT 'new',
 
             -- Scoring & matching (populated by matcher module)
             match_score         REAL,                       -- 0.0 – 1.0
@@ -86,7 +88,8 @@ def initialise_database() -> None:
 
             -- Flags
             flagged_visa        INTEGER NOT NULL DEFAULT 0, -- 1 if visa expiry question found
-            dealbreaker_found   INTEGER NOT NULL DEFAULT 0  -- 1 if hard dealbreaker detected
+            dealbreaker_found   INTEGER NOT NULL DEFAULT 0, -- 1 if hard dealbreaker detected
+            cv_tailoring_failed INTEGER NOT NULL DEFAULT 0  -- 1 if CV tailoring fell back to base CV (JSON invalid / validation failed)
         )
     """)
 
@@ -220,6 +223,42 @@ def get_monthly_spend() -> float:
     ).fetchone()
     conn.close()
     return float(row["total"])
+
+
+def get_monthly_budget() -> float:
+    """Return the monthly budget limit (USD) from job_board_targeting.json."""
+    from config_loader import job_board_targeting
+    config = job_board_targeting()
+    return float(config.get("cost_controls", {}).get("monthly_budget_usd", 15.0))
+
+
+def check_budget_allows(cost_estimate: float) -> tuple[bool, float, float]:
+    """
+    Check if the estimated cost would exceed the monthly budget.
+
+    Returns: (allowed: bool, current_spend: float, budget_limit: float)
+    Raises: BudgetExceededError if the API call would exceed the budget.
+    """
+    current = get_monthly_spend()
+    limit = get_monthly_budget()
+    allowed = (current + cost_estimate) <= limit
+
+    if not allowed:
+        raise BudgetExceededError(
+            f"Monthly budget exceeded. Current: ${current:.2f}, "
+            f"Limit: ${limit:.2f}, Estimated cost: ${cost_estimate:.2f}"
+        )
+
+    return allowed, current, limit
+
+
+# ---------------------------------------------------------------------------
+# Exception classes
+# ---------------------------------------------------------------------------
+
+class BudgetExceededError(Exception):
+    """Raised when an API call would exceed the monthly budget limit."""
+    pass
 
 
 if __name__ == "__main__":

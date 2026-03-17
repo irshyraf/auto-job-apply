@@ -229,7 +229,7 @@ def _insert_job(conn: sqlite3.Connection, job: dict) -> bool:
                 :source_board, :source_url, :dedup_hash,
                 :job_title, :company_name, :location, :work_setup,
                 :salary_min, :salary_max, :contract_type,
-                :description_text, :date_posted, 'scraped',
+                :description_text, :date_posted, 'new',
                 :company_sector
             )
         """, job)

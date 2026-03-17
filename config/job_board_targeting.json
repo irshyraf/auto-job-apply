@@ -1,22 +1,21 @@
 {
   "_meta": {
-    "name": "Job Board Targeting — Module 1 Configuration",
+    "name": "Job Board Targeting \u2014 Module 1 Configuration",
     "version": "1.0",
     "created": "2026-03-16",
     "description": "Which job boards to scrape, in what order, how often, and with what search queries. Also covers scraping approach, rate limits, and deduplication."
   },
-
   "board_priority": {
-    "_description": "Boards are ranked by relevance to Aafreen's target roles (BD, marketing, sales, account management at £28-40K in London). Tier 1 boards are scraped first and most frequently. Tier 2 boards are supplementary.",
+    "_description": "Boards are ranked by relevance to Aafreen's target roles (BD, marketing, sales, account management at \u00a328-40K in London). Tier 1 boards are scraped first and most frequently. Tier 2 boards are supplementary.",
     "tier_1_primary": [
       {
         "name": "LinkedIn Jobs",
         "url": "https://www.linkedin.com/jobs",
         "why": "Highest volume of BD, partnerships, and account management roles in London. Most employers post here. Best for discovering company pages and recruiter contacts (feeds Track B).",
-        "scrape_method": "JobSpy library or Playwright with residential proxies. LinkedIn is the most restrictive — rate limits around page 10 with a single IP.",
+        "scrape_method": "JobSpy library or Playwright with residential proxies. LinkedIn is the most restrictive \u2014 rate limits around page 10 with a single IP.",
         "rate_limit": "Max 50 listings per scrape session. Wait 2-5 seconds between page loads. Use proxy rotation. Scrape 2x daily max.",
         "apply_method": "External application links (redirects to company ATS). Easy Apply roles can be flagged but external links are preferred for form automation.",
-        "notes": "LinkedIn also feeds Module 7 (Recruiter Outreach) — hiring manager and recruiter profiles can be extracted from listings."
+        "notes": "LinkedIn also feeds Module 7 (Recruiter Outreach) \u2014 hiring manager and recruiter profiles can be extracted from listings."
       },
       {
         "name": "Indeed UK",
@@ -31,10 +30,10 @@
         "name": "Reed",
         "url": "https://www.reed.co.uk",
         "why": "Strong UK-specific board. Good for agency roles, marketing coordinators, and account executive positions. Salary data is usually included. Clean listing format that's easy to parse.",
-        "scrape_method": "Reed has a public API (reed.co.uk/developers) with free tier access. Preferred over scraping — structured JSON responses, no anti-bot risk.",
+        "scrape_method": "Reed has a public API (reed.co.uk/developers) with free tier access. Preferred over scraping \u2014 structured JSON responses, no anti-bot risk.",
         "rate_limit": "API: follow their rate limits (typically 25 requests per 10 seconds). If scraping: 1-2 second delays.",
         "apply_method": "Mostly external links to company ATS. Some direct Reed applications.",
-        "notes": "Reed API returns salary, location, and job description in structured format — excellent for matching and filtering."
+        "notes": "Reed API returns salary, location, and job description in structured format \u2014 excellent for matching and filtering."
       }
     ],
     "tier_2_supplementary": [
@@ -75,7 +74,6 @@
       }
     ]
   },
-
   "search_queries": {
     "_description": "These queries are run on each board, filtered to London. They map directly to the search keywords in target_profile.json.",
     "high_priority": [
@@ -107,10 +105,9 @@
     ],
     "query_rotation": "Run high priority queries on every scrape cycle. Medium priority on every other cycle. Low priority once daily."
   },
-
   "scrape_schedule": {
     "frequency": "Manual only. Triggered by the 'Scrape now' button in the dashboard UI. No cron jobs, no timers, no background scheduling.",
-    "schedule": "NONE — user-initiated only",
+    "schedule": "NONE \u2014 user-initiated only",
     "job_cap": {
       "max_new_matches_per_run": 10,
       "behaviour": "After scraping, filtering, deduplication, and matching, the system takes the TOP 10 matches by match score and stops. Remaining matches are stored in the database as 'queued' and promoted in the next scrape if slots are available.",
@@ -118,26 +115,37 @@
     },
     "notes": "The user controls when scraping happens. They click 'Scrape now', wait for results, review matches, approve, wait for tailoring, review content, submit one by one. Everything is input-driven."
   },
-
   "filters": {
     "_description": "Applied after scraping, before entering the matching pipeline. These map to the hard_dealbreakers in target_profile.json.",
     "location": "London only. Reject listings outside London unless explicitly marked as fully remote.",
     "contract_type": "Permanent only. Reject: fixed-term, freelance, contract, commission-only, internship.",
     "salary": {
       "minimum": 28000,
-      "action_if_no_salary": "Include but flag. Many listings don't show salary — these should still enter the pipeline.",
+      "action_if_no_salary": "Include but flag. Many listings don't show salary \u2014 these should still enter the pipeline.",
       "action_if_below_minimum": "Reject automatically."
     },
-    "title_exclusions": ["Marketing Assistant", "Marketing Intern", "Sales Assistant", "Telesales", "Cold Caller", "Receptionist", "Administrator"],
-    "keyword_exclusions": ["commission only", "self-employed", "unpaid", "volunteer", "work experience"]
+    "title_exclusions": [
+      "Marketing Assistant",
+      "Marketing Intern",
+      "Sales Assistant",
+      "Telesales",
+      "Cold Caller",
+      "Receptionist",
+      "Administrator"
+    ],
+    "keyword_exclusions": [
+      "commission only",
+      "self-employed",
+      "unpaid",
+      "volunteer",
+      "work experience"
+    ]
   },
-
   "deduplication": {
     "method": "Hash the combination of company_name + job_title + location. If a listing with the same hash already exists in the database, skip it.",
     "cross_board": "The same role often appears on 3-4 boards. Deduplication runs across all boards, not per-board.",
     "expiry": "Listings older than 30 days are marked as expired and excluded from the active pipeline."
   },
-
   "output_schema": {
     "_description": "Each scraped listing is stored in this format in the SQLite database.",
     "fields": {
@@ -159,11 +167,16 @@
       "dedup_hash": "Hash of company + title + location"
     }
   },
-
   "tooling_recommendation": {
     "primary": "JobSpy Python library (github.com/speedyapply/JobSpy). Supports LinkedIn, Indeed, Glassdoor, Google Jobs in one API. Open source, actively maintained.",
     "secondary": "Playwright (Python) for boards not supported by JobSpy (Reed API, Totaljobs, CWJobs).",
     "proxies": "Residential proxy rotation required for LinkedIn and Google. Indeed and Reed are more permissive. Budget for a proxy service (e.g. Bright Data, ScraperAPI) or use free rotating proxies initially.",
     "database": "SQLite for initial build. PostgreSQL if scaling to 1000+ listings/day."
+  },
+  "cost_controls": {
+    "monthly_budget_usd": 15.0,
+    "prompt_caching": {
+      "enabled": true
+    }
   }
 }

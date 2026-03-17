@@ -26,7 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from config_loader import answer_bank, personal_data, question_classification_rules, tone_voice
-from database import get_connection, calculate_api_cost, log_api_usage
+from database import get_connection, calculate_api_cost, log_api_usage, check_budget_allows, BudgetExceededError
 
 try:
     from dotenv import load_dotenv
@@ -215,6 +215,12 @@ def _generate_tier4(question_label: str, story: dict, job: dict) -> tuple[str, d
         f"JD excerpt (first 600 chars): {(job.get('description_text') or '')[:600]}"
     )
 
+    # Check budget before API call
+    try:
+        check_budget_allows(0.04)  # Estimate ~$0.02-0.04 max for Tier 4
+    except BudgetExceededError:
+        raise  # Propagate budget error up to caller
+
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     msg = client.messages.create(
         model=cfg["model"],
@@ -287,6 +293,12 @@ def _generate_tier3(question_label: str, job: dict, char_limit: int | None = Non
         f"Write a {word_guidance} answer. Warm, specific, genuine. Not template-sounding."
     )
 
+    # Check budget before API call
+    try:
+        check_budget_allows(0.04)  # Estimate ~$0.02-0.04 max for Tier 3
+    except BudgetExceededError:
+        raise  # Propagate budget error up to caller
+
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     msg = client.messages.create(
         model=cfg["model"],
@@ -358,6 +370,12 @@ def generate_cover_letter(job: dict) -> tuple[str, dict]:
         f"JD: {(job.get('description_text') or '')[:800]}\n\n"
         f"## COMPANY DOSSIER\n{job.get('company_dossier') or 'Not available.'}"
     )
+
+    # Check budget before API call
+    try:
+        check_budget_allows(0.04)  # Estimate ~$0.02-0.04 max for cover letter
+    except BudgetExceededError:
+        raise  # Propagate budget error up to caller
 
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     msg = client.messages.create(

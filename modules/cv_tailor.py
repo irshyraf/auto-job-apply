@@ -34,7 +34,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from config_loader import cv_tailoring_prompt, personal_data
-from database import get_connection, calculate_api_cost, log_api_usage
+from database import get_connection, calculate_api_cost, log_api_usage, check_budget_allows, BudgetExceededError
 
 try:
     from dotenv import load_dotenv
@@ -340,7 +340,7 @@ def _make_output_path(company: str, title: str) -> Path:
 def tailor_job(job: dict) -> dict:
     """
     Tailor the CV for a single job dict.
-    Returns {"status": "ok"|"validation_warning"|"fallback", "pdf_path": str, "violations": list}
+    Returns {"status": "ok"|"validation_warning"|"fallback"|"budget_exceeded", "pdf_path": str, "violations": list}
     """
     cfg = cv_tailoring_prompt()
     system_prompt   = cfg["system_prompt"]
@@ -349,6 +349,13 @@ def tailor_job(job: dict) -> dict:
 
     base_cv = _build_base_cv_json(variant)
     user_prompt = _build_user_prompt(variant, base_cv, job)
+
+    # --- Check budget before making API calls ---
+    try:
+        check_budget_allows(0.08)  # Estimate ~$0.08 max for CV tailoring
+    except BudgetExceededError as e:
+        print(f"    Budget check failed: {e}")
+        return {"status": "budget_exceeded", "pdf_path": None, "violations": [str(e)]}
 
     cv_json = None
     violations = []
@@ -450,7 +457,7 @@ def run_tailor(job_ids: list[int] | None = None) -> dict:
         ).fetchall()
     else:
         rows = conn.execute(
-            "SELECT * FROM jobs WHERE status = 'approved_stage_1'"
+            "SELECT * FROM jobs WHERE status IN ('approved_stage_1', 'researched')"
         ).fetchall()
 
     if not rows:
@@ -523,7 +530,14 @@ def tailor_single_job(job_id: int) -> dict:
         return {"success": False, "pdf_path": None, "error": f"Job {job_id} not found", "violations": []}
 
     job = dict(row)
-    result = tailor_job(job)
+
+    try:
+        result = tailor_job(job)
+    except BudgetExceededError as e:
+        return {"success": False, "pdf_path": None, "error": str(e), "violations": []}
+
+    if result["status"] == "budget_exceeded":
+        return {"success": False, "pdf_path": None, "error": result["violations"][0] if result.get("violations") else "Monthly budget limit exceeded", "violations": result.get("violations", [])}
 
     if result["status"] == "render_failed":
         return {"success": False, "pdf_path": None, "error": "PDF render failed", "violations": result.get("violations", [])}
@@ -532,9 +546,13 @@ def tailor_single_job(job_id: int) -> dict:
         write_conn = get_connection()
         existing_notes = job.get("match_notes") or ""
         new_notes = f"{existing_notes} | PDF: {result['pdf_path']}"
+
+        # Flag if this was a fallback (JSON invalid or validation failed)
+        cv_tailoring_failed = 1 if result["status"] == "fallback" else 0
+
         write_conn.execute(
-            "UPDATE jobs SET match_notes=?, status='pending_stage_2' WHERE id=?",
-            (new_notes.strip(" |"), job_id)
+            "UPDATE jobs SET match_notes=?, status='pending_stage_2', cv_tailoring_failed=? WHERE id=?",
+            (new_notes.strip(" |"), cv_tailoring_failed, job_id)
         )
         write_conn.commit()
         write_conn.close()

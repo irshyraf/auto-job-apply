@@ -24,11 +24,13 @@ MANUAL_STATUSES = ["submitted", "in_progress", "no_response", "interview", "reje
 TAB_FILTERS = {
     "All":        None,
     "Submitted":  ["submitted", "in_progress", "no_response", "interview", "rejected", "withdrawn"],
-    "In review":  ["pending_stage_1", "approved_stage_1", "pending_stage_2", "approved", "queued"],
+    "In review":  ["new", "matched", "pending_stage_1", "approved_stage_1", "researched", "pending_stage_2", "approved", "queued"],
     "Skipped":    ["skipped_stage_1", "skipped_stage_2"],
 }
 
 STATUS_COLOUR = {
+    "new":             "⚪",
+    "matched":         "🟡",
     "submitted":       "🟢",
     "interview":       "🟢",
     "in_progress":     "🔵",
@@ -37,6 +39,7 @@ STATUS_COLOUR = {
     "approved_stage_1":"🔵",
     "approved":        "🔵",
     "queued":          "⚪",
+    "researched":      "🟡",
     "no_response":     "⚪",
     "rejected":        "🔴",
     "withdrawn":       "⚪",
