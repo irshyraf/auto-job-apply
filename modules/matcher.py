@@ -5,7 +5,7 @@ Reads all jobs with status='new' from the database and scores each one
 using only rule-based logic (no Claude API calls in this phase).
 
 Scoring breakdown (max 1.0):
-  Title match        0.40  — Tier 1 title = 0.40, Tier 2 = 0.25
+  Title match        0.40  — Tier 1 title = 0.40, Tier 2 = 0.25, soft keyword match = 0.20
   Salary             0.20  — present + meets minimum = 0.20, absent = 0.10
   Work setup         0.15  — remote=0.15, hybrid=0.10, on-site=0.05
   Keyword boost      0.15  — BD/partnerships/commercial keywords in title/desc
@@ -13,8 +13,8 @@ Scoring breakdown (max 1.0):
 
 After scoring:
   Dealbreaker detected  → status='filtered_out', dealbreaker_found=1
-  match_score < 0.40    → status='filtered_out'
-  match_score >= 0.40   → status='matched'
+  match_score < 0.35    → status='filtered_out'
+  match_score >= 0.35   → status='matched'
 
 CV variant is selected from target_profile.json cv_variant_selection map.
 
@@ -162,13 +162,16 @@ def _score_job(job: dict) -> tuple[float, str]:
     notes = []
 
     # --- Title match (up to 0.40) ---
+    # First try exact phrase match (all words), then fall back to keyword match
     title_score = 0.0
+    title_match_note = None
+
     for t in tier1_titles:
         # Allow partial overlap: if core words of target title appear in job title
         words = [w for w in t.split() if len(w) > 3]
         if all(w in title for w in words):
             title_score = 0.40
-            notes.append(f"Tier 1 title match ({t})")
+            title_match_note = f"Tier 1 title match ({t})"
             break
 
     if title_score == 0.0:
@@ -176,10 +179,25 @@ def _score_job(job: dict) -> tuple[float, str]:
             words = [w for w in t.split() if len(w) > 3]
             if all(w in title for w in words):
                 title_score = 0.25
-                notes.append(f"Tier 2 title match ({t})")
+                title_match_note = f"Tier 2 title match ({t})"
                 break
 
+    # Fallback: if no exact phrase match, check for key business keywords (partial credit)
     if title_score == 0.0:
+        key_keywords = [
+            "business development", "account executive", "account manager",
+            "partnerships", "client development", "commercial", "growth",
+            "new business", "sales development", "revenue", "account coordinator"
+        ]
+        matched_kw = [kw for kw in key_keywords if kw in title]
+        if matched_kw:
+            # Partial credit: matches core function but not exact title
+            title_score = 0.20
+            title_match_note = f"Soft title match: {matched_kw[0]}"
+
+    if title_score > 0.0:
+        notes.append(title_match_note)
+    else:
         notes.append("No title match")
 
     score += title_score
@@ -278,7 +296,7 @@ def run_match() -> dict:
         # --- Score ---
         score, notes = _score_job(job)
 
-        if score < 0.40:
+        if score < 0.35:
             conn.execute(
                 "UPDATE jobs SET status='filtered_out', match_score=?, match_notes=? WHERE id=?",
                 (score, f"Score too low ({score}) | {notes}", job["id"])
