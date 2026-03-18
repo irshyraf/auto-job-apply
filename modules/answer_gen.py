@@ -22,6 +22,7 @@ import json
 import os
 import re
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -529,8 +530,34 @@ def run_answer_gen(
         field_type = field.get("field_type", "text_long")
         char_limit = field.get("char_limit")
 
-        answer, usage = classify_and_answer(label, field_type, job, char_limit)
-        save_answer(conn, job_id, answer)
+        # Retry logic: attempt 1 + fallback on failure (spec 3.1 #2)
+        answer, usage = None, None
+        for attempt in range(1, 3):
+            try:
+                answer, usage = classify_and_answer(label, field_type, job, char_limit)
+                break  # Success, exit retry loop
+            except Exception as e:
+                if attempt == 1:
+                    print(f"    [Attempt 1 failed] {str(e)[:80]}... retrying in 3s")
+                    time.sleep(3)
+                else:
+                    print(f"    [Attempt 2 failed] Skipping field: {label[:50]}")
+                    answer = {
+                        "field_name": label,
+                        "field_type": field_type,
+                        "tier": 3,
+                        "answer_text": None,
+                        "answer_source": "skipped_api_error",
+                        "story_id": None,
+                        "competency_tags": None,
+                        "needs_review": 1,
+                        "flagged": 0,
+                    }
+                    usage = None
+                    break  # Exit retry loop, use the skipped answer
+
+        if answer:
+            save_answer(conn, job_id, answer)
 
         # Log API usage for Tier 3 and Tier 4 answers
         if usage and answer["tier"] in (3, 4):
@@ -564,21 +591,35 @@ def run_answer_gen(
             print(f"         → {preview}...")
         print()
 
-    # Cover letter
+    # Cover letter — with retry logic (spec 3.1 #2)
     if want_cover_letter:
         print("  Generating cover letter...")
-        cl_text, cl_usage = generate_cover_letter(job)
-        save_answer(conn, job_id, {
-            "field_name":      "cover_letter",
-            "field_type":      "cover_letter",
-            "tier":            3,
-            "answer_text":     cl_text,
-            "answer_source":   "ai_generated",
-            "story_id":        None,
-            "competency_tags": None,
-            "needs_review":    1,
-            "flagged":         0,
-        })
+        cl_text, cl_usage = None, None
+        for attempt in range(1, 3):
+            try:
+                cl_text, cl_usage = generate_cover_letter(job)
+                break  # Success, exit retry loop
+            except Exception as e:
+                if attempt == 1:
+                    print(f"    [Attempt 1 failed] {str(e)[:80]}... retrying in 3s")
+                    time.sleep(3)
+                else:
+                    print(f"    [Attempt 2 failed] Skipping cover letter generation")
+                    cl_text = None
+                    cl_usage = None
+
+        if cl_text:
+            save_answer(conn, job_id, {
+                "field_name":      "cover_letter",
+                "field_type":      "cover_letter",
+                "tier":            3,
+                "answer_text":     cl_text,
+                "answer_source":   "ai_generated",
+                "story_id":        None,
+                "competency_tags": None,
+                "needs_review":    1,
+                "flagged":         0,
+            })
         # Log API usage for cover letter
         if cl_usage:
             cost = calculate_api_cost(
@@ -609,7 +650,9 @@ def run_answer_gen(
 # ---------------------------------------------------------------------------
 
 # Standard field set pre-generated at Stage 1 approval so user can review
-# before submitting. Submitter still handles any additional on-the-fly fields.
+# before submitting. EXCLUDES Tier 4 (STAR stories) and cover letter — these
+# are generated on-the-fly during submission ONLY if the form has them.
+# This prevents wasting API credits on answers that may never be used (spec compliance).
 _STANDARD_PRE_GENERATE_FIELDS = [
     # Tier 1 factual — from vault, zero API cost
     {"label": "First name",                                     "field_type": "text_short"},
@@ -630,26 +673,34 @@ _STANDARD_PRE_GENERATE_FIELDS = [
     # Tier 2 — from vault
     {"label": "How did you hear about this role?",              "field_type": "dropdown"},
     {"label": "Why are you looking for a new role?",            "field_type": "text_long"},
-    # Tier 4 — best STAR story
-    {"label": "Tell me about a time you exceeded a commercial target", "field_type": "text_long"},
-    {"label": "Describe a situation where you had to build a relationship quickly", "field_type": "text_long"},
-    # Tier 3 — AI-generated role-specific
-    {"label": "Why do you want to work at this company?",       "field_type": "text_long"},
-    {"label": "What relevant experience do you have for this role?", "field_type": "text_long"},
 ]
 
 
-def generate_answers_for_job(job_id: int, want_cover_letter: bool = True) -> dict:
+def generate_answers_for_job(
+    job_id: int,
+    fields: list[dict] | None = None,
+    want_cover_letter: bool = False,
+) -> dict:
     """
-    Pre-generate answers for a standard set of common fields.
-    Called by the Streamlit UI immediately after CV tailoring.
+    Pre-generate answers for provided fields, or fall back to standard Tier 1/2 fields.
+    Called by the Streamlit UI after CV tailoring, typically with fields detected from
+    a form prescan.
+
+    Args:
+        job_id: Database ID of the job
+        fields: Field list from form prescan (from prescan_job_form).
+               If None, uses _STANDARD_PRE_GENERATE_FIELDS (Tier 1/2 vault-only, fallback).
+        want_cover_letter: If True, also pre-generate a cover letter (only if detected
+                          in form prescan). Default False — cover letters are generated
+                          on-the-fly during submission ONLY if the form has a CL field.
 
     Returns {"success": bool, "answer_count": int, "flagged": int, "error": str|None}
     """
     try:
+        use_fields = fields if fields is not None else _STANDARD_PRE_GENERATE_FIELDS
         stats = run_answer_gen(
             job_id=job_id,
-            fields=_STANDARD_PRE_GENERATE_FIELDS,
+            fields=use_fields,
             want_cover_letter=want_cover_letter,
         )
         return {

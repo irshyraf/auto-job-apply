@@ -125,15 +125,34 @@ def _skip_all(job_ids: list) -> None:
 
 
 def _run_tailoring(job_id: int) -> dict:
-    """Tailor CV + pre-generate answers for one job."""
+    """
+    Steps 10–13: Prescan form + tailor CV in parallel, then generate answers
+    for detected fields only (spec-compliant, zero wasted API credits).
+    """
     from modules.cv_tailor import tailor_single_job
     from modules.answer_gen import generate_answers_for_job
+    from modules.submitter import prescan_job_form
+    from concurrent.futures import ThreadPoolExecutor
 
-    tailor_result = tailor_single_job(job_id)
+    # Steps 10 + 11: prescan form and tailor CV in parallel
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        prescan_f = executor.submit(prescan_job_form, job_id)
+        tailor_f  = executor.submit(tailor_single_job, job_id)
+        prescan_result = prescan_f.result()
+        tailor_result  = tailor_f.result()
+
     if not tailor_result["success"]:
         return {"success": False, "error": tailor_result.get("error", "CV tailoring failed")}
 
-    answer_result = generate_answers_for_job(job_id, want_cover_letter=True)
+    # Steps 12 + 13: generate answers only for detected fields
+    detected_fields = prescan_result.get("fields") or None
+    want_cl         = prescan_result.get("has_cover_letter", False)
+
+    answer_result = generate_answers_for_job(
+        job_id,
+        fields=detected_fields,
+        want_cover_letter=want_cl,
+    )
     # Answer gen failure is non-blocking — CV tailored OK is the important part
     return {
         "success":      True,
@@ -172,11 +191,8 @@ def render() -> None:
             _approve_all(job_ids)
             st.toast(f"All {len(job_ids)} jobs queued for tailoring.", icon="✅")
             with st.spinner(f"Tailoring {len(job_ids)} CV(s)…"):
-                from modules.cv_tailor import tailor_single_job
-                from modules.answer_gen import generate_answers_for_job
                 for jid in job_ids:
-                    tailor_single_job(jid)
-                    generate_answers_for_job(jid, want_cover_letter=True)
+                    _run_tailoring(jid)
             st.toast("Tailoring complete — review in Review content.", icon="✅")
             st.session_state["page"] = "review_content"
             st.rerun()

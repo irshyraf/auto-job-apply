@@ -301,6 +301,126 @@ async def _get_field_label(page: Page, element) -> str:
     return ""
 
 
+# ---------------------------------------------------------------------------
+# Form prescan — detect fields before answer generation
+# ---------------------------------------------------------------------------
+
+async def _prescan_form(url: str) -> dict:
+    """
+    Pre-scan the application form to build a field map.
+    Runs before answer generation so we only generate answers for fields
+    that actually exist on the form (spec steps 10–13).
+
+    Returns {"fields": [...], "has_cover_letter": bool, "error": str|None}
+    """
+    try:
+        async with async_playwright() as pw:
+            browser = await pw.chromium.launch(headless=True)
+            page = await browser.new_page(
+                viewport={"width": 1280, "height": 900},
+                user_agent=(
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                ),
+            )
+
+            try:
+                response = await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+                await asyncio.sleep(1.5)
+
+                # Check for 404 / expired
+                if response and response.status == 404:
+                    await browser.close()
+                    return {"fields": [], "has_cover_letter": False, "error": "404"}
+
+                page_text = (await page.inner_text("body")).lower()
+                if any(kw in page_text for kw in ["not found", "expired", "removed", "no longer available"]):
+                    await browser.close()
+                    return {"fields": [], "has_cover_letter": False, "error": "expired"}
+
+                # Collect text inputs and textareas
+                fields = []
+                inputs = await page.locator("input:visible, textarea:visible").all()
+                selects = await page.locator("select:visible").all()
+                file_inputs = await page.locator("input[type='file']").all()
+
+                for el in inputs:
+                    input_type = (await el.get_attribute("type") or "text").lower()
+                    if input_type in ("submit", "button", "hidden", "file", "checkbox", "radio"):
+                        continue
+
+                    label = await _get_field_label(page, el)
+                    if not label:
+                        continue
+
+                    # Determine field type
+                    if input_type == "textarea" or el.evaluate("el => el.tagName.toLowerCase()") == "textarea":
+                        field_type = "text_long"
+                    else:
+                        field_type = "text_short"
+
+                    fields.append({"label": label, "field_type": field_type})
+
+                # Collect selects
+                for el in selects:
+                    label = await _get_field_label(page, el)
+                    if not label:
+                        continue
+                    fields.append({"label": label, "field_type": "dropdown"})
+
+                # Detect cover letter field
+                has_cover_letter = False
+
+                # Check file inputs for "cover" keyword
+                for el in file_inputs:
+                    label = await _get_field_label(page, el)
+                    if label and "cover" in label.lower():
+                        has_cover_letter = True
+                        break
+
+                # Check textareas for "cover letter"
+                if not has_cover_letter:
+                    for el in inputs:
+                        tag = await el.evaluate("el => el.tagName.toLowerCase()")
+                        if tag == "textarea":
+                            label = await _get_field_label(page, el)
+                            if label and "cover letter" in label.lower():
+                                has_cover_letter = True
+                                break
+
+                await browser.close()
+                return {"fields": fields, "has_cover_letter": has_cover_letter, "error": None}
+
+            except PWTimeout:
+                await browser.close()
+                return {"fields": [], "has_cover_letter": False, "error": "timeout"}
+            except Exception as e:
+                await browser.close()
+                return {"fields": [], "has_cover_letter": False, "error": str(e)[:100]}
+
+    except Exception as e:
+        return {"fields": [], "has_cover_letter": False, "error": str(e)[:100]}
+
+
+def prescan_job_form(job_id: int) -> dict:
+    """
+    Synchronous wrapper for prescan. Loads job URL from database and pre-scans the form.
+    Safe to call from Streamlit UI. Falls back gracefully if prescan fails.
+    """
+    try:
+        conn = get_connection()
+        row = conn.execute("SELECT source_url FROM jobs WHERE id=?", (job_id,)).fetchone()
+        conn.close()
+
+        if not row or not row["source_url"]:
+            return {"fields": [], "has_cover_letter": False, "error": "no_url"}
+
+        return asyncio.run(_prescan_form(row["source_url"]))
+    except Exception as e:
+        return {"fields": [], "has_cover_letter": False, "error": str(e)[:100]}
+
+
 async def _fill_text(page: Page, element, value: str) -> None:
     await element.click()
     await element.fill("")
@@ -712,8 +832,34 @@ async def submit_job(job: dict, answers: list[dict], dry_run: bool = True) -> di
 
         try:
             log_lines.append(f"  Navigating to {url}...")
-            await page.goto(url, wait_until="domcontentloaded", timeout=20000)
+            response = await page.goto(url, wait_until="domcontentloaded", timeout=20000)
             await asyncio.sleep(2)
+
+            # Check for 404 / expired listing (spec edge case #30)
+            if response and response.status == 404:
+                log_lines.append(f"  ERROR: Job listing returned 404 — marking as expired")
+                await browser.close()
+                conn_e = get_connection()
+                conn_e.execute("UPDATE jobs SET status = 'expired' WHERE id = ?", (job_id,))
+                conn_e.commit()
+                conn_e.close()
+                return {"status": "expired", "log": log_lines, "screenshot": "", "ref": None}
+
+            # Check page title/body for "not found" or "expired" keywords
+            try:
+                page_text = (await page.inner_text("body")).lower()
+                page_title = (await page.title()).lower()
+            except Exception:
+                page_text, page_title = "", ""
+
+            if any(kw in page_title or kw in page_text for kw in ["not found", "expired", "removed", "no longer available"]):
+                log_lines.append(f"  ERROR: Job listing appears to be expired or not found")
+                await browser.close()
+                conn_e = get_connection()
+                conn_e.execute("UPDATE jobs SET status = 'expired' WHERE id = ?", (job_id,))
+                conn_e.commit()
+                conn_e.close()
+                return {"status": "expired", "log": log_lines, "screenshot": "", "ref": None}
 
             # If Indeed page, click through to the actual application
             if ats == "indeed":
@@ -733,18 +879,66 @@ async def submit_job(job: dict, answers: list[dict], dry_run: bool = True) -> di
             }
             handler = HANDLERS.get(ats, generic_fill_form)
 
-            if handler == generic_fill_form:
-                fill_stats = await generic_fill_form(page, answers, job, dry_run, log_lines)
-            else:
-                fill_stats = await handler(page, answers, job, dry_run, log_lines)
+            # Multi-page form support (spec edge case #35)
+            # Loop through pages until Submit button is found
+            page_count = 1
+            max_pages = 4
+            while page_count <= max_pages:
+                if handler == generic_fill_form:
+                    fill_stats = await generic_fill_form(page, answers, job, dry_run, log_lines)
+                else:
+                    fill_stats = await handler(page, answers, job, dry_run, log_lines)
 
-            log_lines.append(
-                f"  Fields: {fill_stats['filled']} filled, "
-                f"{fill_stats['skipped']} skipped, "
-                f"{fill_stats['file_uploads']} uploaded"
-            )
-            if fill_stats["unmatched"]:
-                log_lines.append(f"  Unmatched fields: {fill_stats['unmatched'][:5]}")
+                log_lines.append(
+                    f"  Page {page_count}: {fill_stats['filled']} filled, "
+                    f"{fill_stats['skipped']} skipped, "
+                    f"{fill_stats['file_uploads']} uploaded"
+                )
+                if fill_stats["unmatched"]:
+                    log_lines.append(f"    Unmatched: {fill_stats['unmatched'][:3]}")
+
+                # Check for Submit/Apply button (end of form)
+                submit_selectors = [
+                    'button[type="submit"]',
+                    'input[type="submit"]',
+                    'button:has-text("Submit application")',
+                    'button:has-text("Submit")',
+                    'button:has-text("Apply")',
+                    'button:has-text("Send application")',
+                ]
+                submit_found = False
+                for sel in submit_selectors:
+                    if await page.locator(sel).count() > 0:
+                        submit_found = True
+                        break
+
+                if submit_found:
+                    log_lines.append("  Submit button found — proceeding to submit")
+                    break
+
+                # Look for Next/Continue buttons to go to next page
+                next_selectors = [
+                    'button:has-text("Next")',
+                    'button:has-text("Continue")',
+                    'button:has-text("Next step")',
+                    'button:has-text("Next page")',
+                    'input[type="button"][value*="Next"]',
+                ]
+                next_clicked = False
+                for sel in next_selectors:
+                    if await page.locator(sel).count() > 0:
+                        log_lines.append(f"  Clicking Next button to go to page {page_count + 1}...")
+                        await page.locator(sel).first.click()
+                        await asyncio.sleep(2)
+                        await page.wait_for_load_state("domcontentloaded", timeout=10000)
+                        next_clicked = True
+                        page_count += 1
+                        break
+
+                if not next_clicked:
+                    # No Next button and no Submit button = something is wrong
+                    log_lines.append(f"  WARN  No Next or Submit button found on page {page_count}")
+                    break
 
             # Screenshot before submit
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")

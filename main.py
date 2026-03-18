@@ -308,13 +308,16 @@ def run_tailor_pipeline() -> None:
 def run_scrape_and_match() -> dict:
     """
     Scrape jobs and match/score them. Called by the Streamlit Dashboard when
-    the user clicks 'Scrape now'. Returns a summary dict the UI can display.
+    the user clicks 'Scrape now'. Includes automatic research on matched jobs
+    (Sequence spec steps 1-7). Returns a summary dict the UI can display.
 
+    Flow: scrape → match → cap enforcement → research → returns summary
     Returns {"new_matches": int, "queued": int, "inserted": int, "timestamp": str}
     """
     from datetime import datetime
     from modules.scraper import run_scrape
     from modules.matcher import run_match
+    from modules.researcher import run_research
     from modules.tracker import auto_update_no_response
 
     conn = get_connection()
@@ -331,6 +334,18 @@ def run_scrape_and_match() -> dict:
         "SELECT COUNT(*) FROM jobs WHERE status = 'pending_stage_1'"
     ).fetchone()[0]
     conn.close()
+
+    # RESEARCH INTEGRATION: Automatically research all pending_stage_1 jobs
+    # (Sequence spec steps 6-7: research before showing Stage 1 cards)
+    if stage1_count > 0:
+        stage1_ids = get_connection().execute(
+            "SELECT id FROM jobs WHERE status = 'pending_stage_1' ORDER BY id"
+        ).fetchall()
+        stage1_ids = [row["id"] for row in stage1_ids]
+        get_connection().close()
+
+        # Run batch research (budget-aware, graceful failure)
+        research_stats = run_research(job_ids=stage1_ids)
 
     return {
         "new_matches": stage1_count,
