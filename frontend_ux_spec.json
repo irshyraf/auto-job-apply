@@ -1,0 +1,265 @@
+{
+  "_meta": {
+    "name": "Frontend UX Specification — Streamlit Dashboard",
+    "version": "1.0",
+    "created": "2026-03-17",
+    "description": "Complete specification for the user-facing Streamlit application. This replaces all command-line interaction — the user should never need to touch code or a terminal to use the system."
+  },
+
+  "technology": {
+    "framework": "Streamlit",
+    "why": "Python-native (no frontend dev needed), single-user friendly, runs in browser, Claude Code can implement directly. Looks professional enough for daily use.",
+    "startup": "User runs 'streamlit run app.py' once (or it auto-starts via a desktop shortcut / shell alias). After that, they interact entirely through the browser at localhost:8501.",
+    "auto_start_option": "Create a simple run.sh / run.bat script that launches the Streamlit app and opens the browser. Double-click to start."
+  },
+
+  "pages": {
+    "dashboard": {
+      "sidebar_label": "Dashboard",
+      "sidebar_icon": "grid",
+      "is_default": true,
+      "purpose": "At-a-glance overview of the entire pipeline. This is what the user sees when they open the app.",
+      "sections": [
+        {
+          "name": "header_bar",
+          "contents": "Page title ('Dashboard') on the left. 'Run scraper now' button on the right.",
+          "header_subtitle": "Last scrape: [timestamp] — [N] new matches found",
+          "run_scraper_button": {
+            "label": "Scrape now",
+            "behaviour": "Triggers Module 1. Shows a spinner while running. On completion, shows 'Found X new matches' and navigates to the New matches page. This is the ONLY way to trigger a scrape — there is no scheduler or cron job.",
+            "note": "User clicks this when they want fresh jobs. Nothing happens until they click."
+          }
+        },
+        {
+          "name": "metric_cards",
+          "layout": "4 cards in a horizontal row",
+          "cards": [
+            {"label": "Awaiting review", "value": "Count of jobs in pending_stage_1 + pending_stage_2", "colour": "amber if > 0, grey if 0"},
+            {"label": "Submitted this week", "value": "Count of jobs with status 'submitted' in last 7 days", "colour": "green"},
+            {"label": "Total applied", "value": "Count of all jobs with status 'submitted'", "colour": "neutral"},
+            {"label": "API spend this month", "value": "Calculated from API usage log. Format: $X.XX", "colour": "red if > 80% of budget limit, green otherwise"}
+          ]
+        },
+        {
+          "name": "recent_activity_table",
+          "columns": ["Role", "Company", "Date", "Status"],
+          "rows": "Last 10 jobs from the database, sorted by date_scraped descending",
+          "status_badges": {
+            "submitted": "green badge",
+            "pending_stage_1": "amber badge, label 'Stage 1 review'",
+            "pending_stage_2": "amber badge, label 'Stage 2 review'",
+            "approved_stage_1": "blue badge, label 'Tailoring...'",
+            "skipped_stage_1": "grey badge, label 'Skipped'",
+            "skipped_stage_2": "grey badge, label 'Skipped'",
+            "expired": "grey badge, label 'Expired'"
+          }
+        }
+      ]
+    },
+
+    "new_matches": {
+      "sidebar_label": "New matches",
+      "sidebar_icon": "check-circle",
+      "sidebar_badge": "Count of jobs in pending_stage_1. Hidden if 0.",
+      "purpose": "Stage 1 Review Gate. Lightweight cards for approving or skipping scraped matches BEFORE any API cost is incurred.",
+      "sections": [
+        {
+          "name": "header",
+          "title": "New matches",
+          "subtitle": "Approve which jobs are worth tailoring. No API cost until you approve."
+        },
+        {
+          "name": "batch_actions",
+          "buttons": ["Approve all", "Skip all"],
+          "sort_dropdown": ["Match score (highest first)", "Salary (highest first)", "Newest first"]
+        },
+        {
+          "name": "match_cards",
+          "card_layout": {
+            "header": "Job title (bold) + Company · Location (work setup) · Salary",
+            "match_badge": "Match score as percentage, blue badge, top right",
+            "body": "2-3 sentence JD summary (from Module 2 company research, no API call needed)",
+            "actions": ["Approve (green button)", "Skip (neutral button)", "View job advert (link, opens original URL in new tab)"]
+          },
+          "max_visible": 10,
+          "empty_state": "No new matches. Next scrape scheduled for [time]."
+        }
+      ]
+    },
+
+    "review_content": {
+      "sidebar_label": "Review content",
+      "sidebar_icon": "list",
+      "sidebar_badge": "Count of jobs in pending_stage_2. Hidden if 0.",
+      "purpose": "Stage 2 Review Gate. Full content review for jobs that passed Stage 1 and have been tailored. Each job is submitted individually — no batch submit.",
+      "sections": [
+        {
+          "name": "header",
+          "title": "Review content",
+          "subtitle": "Review each application's tailored CV, answers, and cover letter. Click Submit on each one individually."
+        },
+        {
+          "name": "review_cards",
+          "card_layout": {
+            "header": "Job title — Company. Match score badge. CV variant used. Cover letter status.",
+            "document_links": "Three inline links: View tailored CV (opens PDF), View cover letter (opens PDF, only if generated), View job advert (opens original URL)",
+            "tailored_profile": "The rewritten 2-3 sentence profile text, shown in a muted box",
+            "application_answers": {
+              "tier_1_2": "Greyed out (opacity 0.5). Question + answer on one line. Label: 'auto-filled'.",
+              "tier_3_4": "Full opacity. Amber border. Question bold. Answer below. Tier 4 shows source story ID (e.g. AB-001).",
+              "flagged": "Red border. Empty field. Must be filled manually before submission."
+            },
+            "cover_letter_preview": "First line in italics. Word count. Expand/collapse toggle.",
+            "actions": {
+              "submit": {
+                "label": "Submit",
+                "style": "Green, primary button",
+                "behaviour": "Triggers Module 6 (Playwright) to fill and submit THIS specific application. Shows a spinner. On success: card moves to 'submitted' status with a green tick. On failure: shows error message and keeps the card in the queue for retry.",
+                "individual_only": true,
+                "note": "There is NO batch submit. Each job is submitted one at a time so the user has full control and can see each result."
+              },
+              "edit": {
+                "label": "Edit",
+                "style": "Neutral button",
+                "behaviour": "Opens inline text editors for profile text, answers, and cover letter."
+              },
+              "skip": {
+                "label": "Skip",
+                "style": "Red outline button",
+                "behaviour": "Removes from queue. Status set to skipped_stage_2."
+              }
+            }
+          },
+          "no_batch_actions": "Stage 2 has NO 'Submit all' or 'Approve all' button. Each application is submitted individually by clicking its own Submit button.",
+          "edit_mode": {
+            "trigger": "Clicking 'Edit' on any card",
+            "behaviour": "Opens inline text editors for: profile text, any Tier 3-4 answer, cover letter. Streamlit text_area widgets. Save button commits changes. Cancel reverts.",
+            "answer_bank_feedback": "After editing a Tier 4 answer, show a checkbox: 'Save this version to your Answer Bank for future use'"
+          },
+          "empty_state": "No applications waiting for content review. Click 'Scrape now' on the Dashboard to find new jobs."
+        }
+      ]
+    },
+
+    "application_tracker": {
+      "sidebar_label": "Application tracker",
+      "sidebar_icon": "plus-square",
+      "purpose": "Full history of every application. Filterable and searchable.",
+      "sections": [
+        {
+          "name": "header",
+          "title": "Application tracker",
+          "subtitle": "All applications across every status."
+        },
+        {
+          "name": "filter_tabs",
+          "tabs": ["All", "Submitted", "In review", "Skipped"],
+          "each_tab_shows_count": true
+        },
+        {
+          "name": "applications_table",
+          "columns": ["Role", "Company", "Salary", "CV variant", "Applied date", "Status"],
+          "sortable": true,
+          "searchable": true,
+          "row_click": "Expands to show: tailored CV link, cover letter link, job advert link, all answers, submission timestamp",
+          "export": "Download as CSV button at the top right"
+        }
+      ]
+    },
+
+    "settings": {
+      "sidebar_label": "Settings",
+      "sidebar_icon": "settings",
+      "purpose": "Adjust scraping, filtering, and budget parameters without touching code or config files.",
+      "sections": [
+        {
+          "name": "scraping_settings",
+          "card_title": "Scraping",
+          "fields": [
+            {"label": "Max jobs per scrape", "type": "number_input", "default": 10, "min": 1, "max": 30, "config_path": "job_board_targeting.scrape_schedule.job_cap.max_new_matches_per_run"}
+          ],
+          "note": "Scraping is triggered manually from the Dashboard. No schedule — you click 'Scrape now' when you want fresh jobs."
+        },
+        {
+          "name": "filter_settings",
+          "card_title": "Job filters",
+          "fields": [
+            {"label": "Minimum salary (£)", "type": "number_input", "default": 28000, "step": 1000, "config_path": "job_board_targeting.filters.salary.minimum"},
+            {"label": "Location", "type": "text_input", "default": "London", "config_path": "job_board_targeting.filters.location"}
+          ]
+        },
+        {
+          "name": "budget_settings",
+          "card_title": "Budget",
+          "fields": [
+            {"label": "Monthly spend limit ($)", "type": "number_input", "default": 15, "step": 1},
+            {"label": "Spent this month", "type": "display_only", "source": "api_usage_log"}
+          ],
+          "auto_pause": "Pipeline pauses automatically when the spend limit is reached. Displays a warning banner on the dashboard."
+        },
+        {
+          "name": "save_button",
+          "label": "Save changes",
+          "behaviour": "Writes updated values back to the relevant config JSON files. Shows a success toast."
+        }
+      ]
+    }
+  },
+
+  "sidebar": {
+    "brand": "Job engine",
+    "items": [
+      {"page": "dashboard", "icon": "grid"},
+      {"page": "new_matches", "icon": "check-circle", "badge": "pending_stage_1 count"},
+      {"page": "review_content", "icon": "list", "badge": "pending_stage_2 count"},
+      {"page": "application_tracker", "icon": "plus-square"},
+      {"divider": true},
+      {"page": "settings", "icon": "settings"}
+    ],
+    "badge_behaviour": "Badges show counts of items needing attention. Hidden when count is 0. Amber colour."
+  },
+
+  "notifications": {
+    "scrape_complete": "Toast notification when scrape finishes: 'Found X new matches'. Page auto-navigates to New matches.",
+    "tailoring_complete": "Toast notification when tailoring finishes: 'X applications ready for review'. Page auto-navigates to Review content.",
+    "submission_success": "Toast notification per job: '[Job title] at [Company] submitted successfully'. Card shows green tick.",
+    "submission_failure": "Error toast per job: 'Failed to submit [Job title] — [reason]'. Card stays in queue for retry.",
+    "budget_warning": "Banner on dashboard when spend reaches 80% of limit: 'Approaching monthly budget limit ($X.XX / $15.00)'",
+    "budget_reached": "Red banner on dashboard: 'Monthly budget limit reached. Tailoring disabled until next month or limit is increased in Settings.'"
+  },
+
+  "interaction_model": {
+    "philosophy": "NOTHING happens automatically. Every action is triggered by a button click in the UI. No cron jobs, no timers, no background schedulers. The user is always in control.",
+    "flow": [
+      "1. User clicks 'Scrape now' on Dashboard → scraper runs → results appear on New matches page",
+      "2. User approves/skips each match on New matches page → approved jobs enter tailoring queue",
+      "3. Tailoring runs immediately for approved jobs (user sees a spinner) → completed jobs appear on Review content page",
+      "4. User reviews each job on Review content page → clicks 'Submit' individually per job → Playwright fills and submits",
+      "5. User sees success/failure per submission → submitted jobs move to Application tracker"
+    ],
+    "what_is_NOT_automated": [
+      "Scraping — must click 'Scrape now'",
+      "Submission — must click 'Submit' on each job individually",
+      "No scheduled jobs of any kind",
+      "No background processes polling or running on timers"
+    ],
+    "what_IS_automated": [
+      "Matching and ranking (happens during scrape, before results are shown)",
+      "Company research (happens during scrape, before results are shown)",
+      "CV tailoring (happens after Stage 1 approval, user sees spinner)",
+      "Tier 1-2 answer auto-fill (happens during tailoring, from vault)",
+      "Tier 3-4 answer generation (happens during tailoring, via API)",
+      "Form filling (happens when user clicks Submit, via Playwright)"
+    ]
+  },
+
+  "streamlit_implementation_notes": {
+    "multi_page": "Use Streamlit's built-in multi-page app structure (pages/ directory) or st.navigation for the sidebar.",
+    "state_management": "Use st.session_state for in-page state (edit mode, expanded cards). Database is the source of truth for all persistent data.",
+    "pdf_display": "Use st.download_button for CV and cover letter PDFs. Optionally render inline with an iframe if Streamlit supports it.",
+    "synchronous_execution": "Everything runs synchronously in the user's session. When user clicks 'Scrape now', the scraper runs and the UI shows a spinner until complete. When user clicks 'Submit', Playwright runs and the UI shows a spinner until submission succeeds or fails. No background threads, no async workers.",
+    "page_refresh": "Use st.rerun() after state-changing actions (approve, skip, submit, save settings) to refresh the current page.",
+    "styling": "Use st.markdown with custom CSS for card layouts, badges, and status colours. Streamlit's default theme is clean enough — don't over-customise.",
+    "startup_script": "Create run.sh (Mac/Linux) and run.bat (Windows) that launch Streamlit and open the browser. User double-clicks to start. No terminal needed."
+  }
+}

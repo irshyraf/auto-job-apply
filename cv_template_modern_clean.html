@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{FULL_NAME}} — CV</title>
+<style>
+  @page {
+    size: A4;
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-size: 9pt;
+    line-height: 1.42;
+    color: #374151;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    border-left: 3px solid #2563eb;
+    padding-left: 14px;
+    margin-bottom: 8pt;
+  }
+
+  .header__name {
+    font-size: 20pt;
+    font-weight: 700;
+    color: #111827;
+    letter-spacing: -0.3px;
+    line-height: 1.15;
+  }
+
+  .header__contact {
+    font-size: 8.5pt;
+    color: #6b7280;
+    margin-top: 3pt;
+    letter-spacing: 0.2px;
+  }
+
+  .header__contact a {
+    color: #6b7280;
+    text-decoration: none;
+  }
+
+  /* ── PROFILE BOX ── */
+  .profile {
+    font-size: 9pt;
+    line-height: 1.5;
+    color: #374151;
+    margin-bottom: 8pt;
+    padding: 7pt 11pt;
+    background: #f8fafc;
+    border-radius: 3px;
+    border: 1px solid #f1f5f9;
+  }
+
+  /* ── SECTION HEADERS ── */
+  .section-title {
+    font-size: 8.5pt;
+    font-weight: 700;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: #2563eb;
+    margin-bottom: 4pt;
+    margin-top: 7pt;
+  }
+
+  .section-title:first-of-type {
+    margin-top: 0;
+  }
+
+  .section-line {
+    border: none;
+    border-top: 1px solid #e5e7eb;
+    margin-bottom: 4pt;
+  }
+
+  /* ── EDUCATION ── */
+  .edu-entry {
+    margin-bottom: 4pt;
+  }
+
+  .edu-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  .edu-row__degree {
+    font-size: 9.5pt;
+    font-weight: 700;
+    color: #111827;
+  }
+
+  .edu-row__dates {
+    font-size: 8.5pt;
+    color: #6b7280;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-left: 12pt;
+  }
+
+  .edu-school {
+    font-size: 8.5pt;
+    color: #6b7280;
+    margin-top: 1pt;
+  }
+
+  .edu-detail {
+    font-size: 8.5pt;
+    color: #6b7280;
+    font-style: italic;
+    margin-top: 1pt;
+  }
+
+  /* ── EXPERIENCE ── */
+  .role {
+    margin-bottom: 7pt;
+    page-break-inside: avoid;
+  }
+
+  .role__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  .role__company {
+    font-size: 10pt;
+    font-weight: 700;
+    color: #111827;
+  }
+
+  .role__dates {
+    font-size: 8pt;
+    color: #6b7280;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-left: 12pt;
+  }
+
+  .role__title {
+    font-size: 8.5pt;
+    color: #2563eb;
+    font-weight: 500;
+    margin-bottom: 4pt;
+    margin-top: 1pt;
+  }
+
+  .role__bullets {
+    list-style: none;
+    padding: 0;
+  }
+
+  .role__bullets li {
+    font-size: 8.7pt;
+    line-height: 1.4;
+    margin-bottom: 1.5pt;
+    padding-left: 14pt;
+    position: relative;
+    color: #374151;
+  }
+
+  .role__bullets li::before {
+    content: '›';
+    position: absolute;
+    left: 3pt;
+    color: #2563eb;
+    font-weight: 700;
+    font-size: 10pt;
+    line-height: 1.25;
+  }
+
+  /* ── EXTRA-CURRICULAR ── */
+  .extras li {
+    font-size: 8.7pt;
+    line-height: 1.4;
+    margin-bottom: 1.5pt;
+    padding-left: 14pt;
+    position: relative;
+    color: #374151;
+  }
+
+  .extras li::before {
+    content: '›';
+    position: absolute;
+    left: 3pt;
+    color: #2563eb;
+    font-weight: 700;
+    font-size: 10pt;
+    line-height: 1.25;
+  }
+
+  /* ── SKILLS ── */
+  .skills-block {
+    font-size: 8.7pt;
+    line-height: 1.45;
+    color: #374151;
+  }
+
+  .skills-block strong {
+    color: #111827;
+  }
+
+  /* ── UTILITY ── */
+  b, strong {
+    font-weight: 700;
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════ HEADER ═══════ -->
+<div class="header">
+  <div class="header__name">{{FULL_NAME}}</div>
+  <div class="header__contact">{{CONTACT_LINE}}</div>
+</div>
+
+<!-- ═══════ PROFILE ═══════ -->
+<div class="profile">{{PROFILE_TEXT}}</div>
+
+<!-- ═══════ EDUCATION ═══════ -->
+<div class="section-title">Education</div>
+<hr class="section-line">
+
+{{#EDUCATION}}
+<div class="edu-entry">
+  <div class="edu-row">
+    <div class="edu-row__degree">{{EDU_DEGREE}}</div>
+    <div class="edu-row__dates">{{EDU_DATES}}</div>
+  </div>
+  <div class="edu-school">{{EDU_SCHOOL}}</div>
+  {{#EDU_DETAIL}}<div class="edu-detail">{{EDU_DETAIL}}</div>{{/EDU_DETAIL}}
+</div>
+{{/EDUCATION}}
+
+<!-- ═══════ EXPERIENCE ═══════ -->
+<div class="section-title">Experience</div>
+<hr class="section-line">
+
+{{#ROLES}}
+<div class="role">
+  <div class="role__header">
+    <div class="role__company">{{ROLE_COMPANY}}</div>
+    <div class="role__dates">{{ROLE_DATES}}</div>
+  </div>
+  <div class="role__title">{{ROLE_TITLE}} — {{ROLE_LOCATION}}</div>
+  <ul class="role__bullets">
+    {{#ROLE_BULLETS}}
+    <li>{{BULLET}}</li>
+    {{/ROLE_BULLETS}}
+  </ul>
+</div>
+{{/ROLES}}
+
+<!-- ═══════ EXTRA-CURRICULAR ═══════ -->
+{{#HAS_EXTRAS}}
+<div class="section-title">Leadership &amp; Extra-Curricular</div>
+<hr class="section-line">
+<ul class="extras" style="list-style:none;padding:0;">
+  {{#EXTRAS}}
+  <li>{{EXTRA}}</li>
+  {{/EXTRAS}}
+</ul>
+{{/HAS_EXTRAS}}
+
+<!-- ═══════ SKILLS ═══════ -->
+<div class="section-title">Skills</div>
+<hr class="section-line">
+<div class="skills-block">
+  {{SKILLS_HTML}}
+</div>
+
+</body>
+</html>

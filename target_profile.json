@@ -1,0 +1,105 @@
+{
+  "career_direction": {
+    "core_strength": "Commercial growth \u2014 finding opportunities, pitching them, closing them, using both marketing channels and direct relationship-building",
+    "long_term_track": "BD Executive > BD/Partnerships Manager > Head of Partnerships > Commercial Director",
+    "near_term_priority": "Structured roles with mentorship, clear progression, and earning potential. Desk-friendly and remote/hybrid compatible.",
+    "environment": "Agencies, mid-size companies, or large corporates. No early-stage startups without support structures."
+  },
+  "search_parameters": {
+    "location": "London only",
+    "work_setup": {
+      "priority_order": [
+        "1. Fully remote",
+        "2. Hybrid \u2014 1 day in office",
+        "3. Hybrid \u2014 2-3 days in office",
+        "4. Office-based (London)"
+      ],
+      "hard_filter": "None. Do NOT exclude any work setup. All are acceptable. Priority order is used for ranking matched jobs, not for filtering them out.",
+      "note": "Office-based and hybrid roles are fully acceptable. The priority order helps rank results when multiple roles are otherwise equal \u2014 it is not a dealbreaker at any level."
+    },
+    "contract_type": "Permanent only. No fixed-term, freelance, or commission-only.",
+    "salary_minimum": 28000,
+    "salary_target": "30000-40000",
+    "right_to_work": true,
+    "sponsorship_required": false,
+    "notice_period": "Immediately available",
+    "industries": "All industries. No exclusions. Industry-agnostic to maximise volume."
+  },
+  "hard_dealbreakers": [
+    "Commission-only or unpaid roles",
+    "Fixed-term contracts or internships",
+    "Roles explicitly requiring visa sponsorship that cannot be provided",
+    "Pure cold-calling / telesales roles (outbound-only with no strategic or account management component)",
+    "Roles titled Marketing Assistant, Marketing Intern, or any title below Executive level"
+  ],
+  "soft_flags": {
+    "office_based": "NOT a hard dealbreaker. Include in results but flag for review. Flexibility can often be negotiated during or after the interview process."
+  },
+  "target_job_titles": {
+    "tier_1_primary": [
+      "Business Development Executive",
+      "Account Executive",
+      "New Business Executive",
+      "Partnerships Executive",
+      "Partnerships Coordinator",
+      "Client Development Executive",
+      "Commercial Executive",
+      "Growth Executive",
+      "Revenue Development Representative",
+      "Marketing & BD Executive",
+      "Account Manager (Junior)",
+      "Client Services Executive",
+      "Account Coordinator (Agency)",
+      "Campaign Executive",
+      "Demand Generation Executive"
+    ],
+    "tier_2_secondary": [
+      "Marketing Executive",
+      "Digital Marketing Executive",
+      "Marketing Coordinator",
+      "Sales & Marketing Coordinator",
+      "Brand Partnerships Coordinator",
+      "Community & Partnerships Executive",
+      "Growth Marketing Manager",
+      "Junior Account Manager",
+      "Commercial Marketing Coordinator",
+      "CRM Executive",
+      "Email Marketing Executive",
+      "Content & Campaigns Executive"
+    ],
+    "tier_notes": {
+      "tier_1": "Apply aggressively. Best fit, strongest earning potential, clearest progression.",
+      "tier_2": "Apply if right fit. Worth pursuing if company offers strong progression, flexibility, or culture fit.",
+      "growth_marketing_manager_note": "Some companies use Manager loosely at entry level \u2014 include if JD matches experience level."
+    }
+  },
+  "cv_variant_selection": {
+    "business_development_partnerships_commercial_new_business_revenue": "AF_Business_Development",
+    "account_executive_account_manager_account_coordinator_client_services": "AF_Agency_Account",
+    "marketing_executive_digital_marketing_campaign_demand_gen_content_crm_email": "AF_Marketing",
+    "sales_and_marketing_growth_sdr": "AF_Sales",
+    "ambiguous_or_hybrid_titles": "AF_Resume"
+  },
+  "search_keywords": {
+    "high_priority": [
+      "business development executive OR account executive OR partnerships executive OR new business executive OR client development",
+      "marketing executive OR demand generation OR campaign executive OR growth executive"
+    ],
+    "medium_priority": [
+      "account coordinator OR account manager junior OR client services executive OR commercial executive",
+      "marketing coordinator OR digital marketing executive OR CRM executive OR email marketing executive"
+    ],
+    "low_priority": [
+      "sales and marketing coordinator OR brand partnerships OR community partnerships OR growth marketing"
+    ]
+  },
+  "system_notes": {
+    "flexibility_negotiation": "Do not hard-filter office-based roles. Flag for review rather than rejecting.",
+    "right_to_work": "Answer is Yes. No dates, visa types, or renewal details in any application.",
+    "sponsorship": "No \u2014 sponsorship not required.",
+    "availability": "Immediately available.",
+    "agency_variant": "Fifth CV variant (Agency/Account Management) exists for agency/account roles.",
+    "industry_tailoring": "Fashion/retail and healthcare covered by direct experience. Tech and financial services lean on economics degree and data/analytics skills.",
+    "probation_risk": "Prioritise companies mentioning onboarding, L&D, or career development. These are retention-focused employers."
+  }
+}

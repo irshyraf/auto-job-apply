@@ -1,0 +1,169 @@
+{
+  "_meta": {
+    "name": "Job Board Targeting — Module 1 Configuration",
+    "version": "1.0",
+    "created": "2026-03-16",
+    "description": "Which job boards to scrape, in what order, how often, and with what search queries. Also covers scraping approach, rate limits, and deduplication."
+  },
+
+  "board_priority": {
+    "_description": "Boards are ranked by relevance to Aafreen's target roles (BD, marketing, sales, account management at £28-40K in London). Tier 1 boards are scraped first and most frequently. Tier 2 boards are supplementary.",
+    "tier_1_primary": [
+      {
+        "name": "LinkedIn Jobs",
+        "url": "https://www.linkedin.com/jobs",
+        "why": "Highest volume of BD, partnerships, and account management roles in London. Most employers post here. Best for discovering company pages and recruiter contacts (feeds Track B).",
+        "scrape_method": "JobSpy library or Playwright with residential proxies. LinkedIn is the most restrictive — rate limits around page 10 with a single IP.",
+        "rate_limit": "Max 50 listings per scrape session. Wait 2-5 seconds between page loads. Use proxy rotation. Scrape 2x daily max.",
+        "apply_method": "External application links (redirects to company ATS). Easy Apply roles can be flagged but external links are preferred for form automation.",
+        "notes": "LinkedIn also feeds Module 7 (Recruiter Outreach) — hiring manager and recruiter profiles can be extracted from listings."
+      },
+      {
+        "name": "Indeed UK",
+        "url": "https://uk.indeed.com",
+        "why": "Largest volume of UK job listings overall. Strong for marketing executive, sales, and junior BD roles. Many SME and agency roles that don't appear on LinkedIn.",
+        "scrape_method": "JobSpy library (Indeed is the best-supported scraper with minimal rate limiting) or direct Playwright scrape. RSS feeds available for some searches.",
+        "rate_limit": "Most permissive of all boards. Can handle 100+ listings per session. Still use 1-2 second delays between requests.",
+        "apply_method": "Mix of Indeed Apply (hosted on Indeed) and external links. Prioritise external links for form automation. Indeed Apply can be handled via Playwright.",
+        "notes": "Indeed searches job descriptions too, so results can include tangentially related roles. Use the dealbreaker filters from target_profile.json to clean results."
+      },
+      {
+        "name": "Reed",
+        "url": "https://www.reed.co.uk",
+        "why": "Strong UK-specific board. Good for agency roles, marketing coordinators, and account executive positions. Salary data is usually included. Clean listing format that's easy to parse.",
+        "scrape_method": "Reed has a public API (reed.co.uk/developers) with free tier access. Preferred over scraping — structured JSON responses, no anti-bot risk.",
+        "rate_limit": "API: follow their rate limits (typically 25 requests per 10 seconds). If scraping: 1-2 second delays.",
+        "apply_method": "Mostly external links to company ATS. Some direct Reed applications.",
+        "notes": "Reed API returns salary, location, and job description in structured format — excellent for matching and filtering."
+      }
+    ],
+    "tier_2_supplementary": [
+      {
+        "name": "Totaljobs",
+        "url": "https://www.totaljobs.com",
+        "why": "Good volume of London commercial roles. Particularly strong for account management and client services positions. Some listings unique to Totaljobs.",
+        "scrape_method": "Playwright or Apify Totaljobs scraper. No public API.",
+        "rate_limit": "Moderate anti-bot protection. Use 2-3 second delays. Proxy rotation recommended.",
+        "apply_method": "Mix of hosted and external applications."
+      },
+      {
+        "name": "Glassdoor",
+        "url": "https://www.glassdoor.co.uk",
+        "why": "Useful as a secondary source and for company intelligence (reviews, salary data, interview questions). Module 2 can pull company dossier data from here.",
+        "scrape_method": "JobSpy library supports Glassdoor. Anti-bot protection is moderate.",
+        "rate_limit": "Rate limits after ~50 listings. Use proxies.",
+        "apply_method": "Mostly redirects to external ATS.",
+        "notes": "Primary value is company research for Module 2, not job discovery. Listings overlap heavily with Indeed and LinkedIn."
+      },
+      {
+        "name": "Google Jobs",
+        "url": "https://www.google.com/search?q=jobs",
+        "why": "Aggregates listings from multiple sources including company career pages not on any board. Good for catching roles that only exist on a company's own site.",
+        "scrape_method": "JobSpy library supports Google Jobs. Use the google_search_term parameter with specific syntax.",
+        "rate_limit": "Google is aggressive with rate limiting. Use proxies. Max 30 listings per query.",
+        "apply_method": "Always redirects to the original source (company ATS or job board).",
+        "notes": "Best used as a catch-all sweep after Tier 1 boards, not as a primary source. Deduplication is critical since it aggregates from other boards."
+      },
+      {
+        "name": "CWJobs",
+        "url": "https://www.cwjobs.co.uk",
+        "why": "Specialist tech and digital roles. Good for tech-adjacent BD and marketing roles (SaaS companies, digital agencies, etc.).",
+        "scrape_method": "Playwright scrape. Part of the Totaljobs group.",
+        "rate_limit": "Similar to Totaljobs.",
+        "apply_method": "External links.",
+        "notes": "Only worth scraping if target industries include tech/SaaS. Lower volume than Tier 1 boards."
+      }
+    ]
+  },
+
+  "search_queries": {
+    "_description": "These queries are run on each board, filtered to London. They map directly to the search keywords in target_profile.json.",
+    "high_priority": [
+      "business development executive London",
+      "account executive London",
+      "partnerships executive London",
+      "new business executive London",
+      "client development executive London",
+      "marketing executive London",
+      "demand generation executive London",
+      "campaign executive London",
+      "growth executive London"
+    ],
+    "medium_priority": [
+      "account coordinator London",
+      "junior account manager London",
+      "client services executive London",
+      "commercial executive London",
+      "marketing coordinator London",
+      "digital marketing executive London",
+      "CRM executive London",
+      "email marketing executive London"
+    ],
+    "low_priority": [
+      "sales and marketing coordinator London",
+      "brand partnerships London",
+      "community partnerships London",
+      "growth marketing London"
+    ],
+    "query_rotation": "Run high priority queries on every scrape cycle. Medium priority on every other cycle. Low priority once daily."
+  },
+
+  "scrape_schedule": {
+    "frequency": "Manual only. Triggered by the 'Scrape now' button in the dashboard UI. No cron jobs, no timers, no background scheduling.",
+    "schedule": "NONE — user-initiated only",
+    "job_cap": {
+      "max_new_matches_per_run": 10,
+      "behaviour": "After scraping, filtering, deduplication, and matching, the system takes the TOP 10 matches by match score and stops. Remaining matches are stored in the database as 'queued' and promoted in the next scrape if slots are available.",
+      "configurable": "User can change this value in Settings page without touching code."
+    },
+    "notes": "The user controls when scraping happens. They click 'Scrape now', wait for results, review matches, approve, wait for tailoring, review content, submit one by one. Everything is input-driven."
+  },
+
+  "filters": {
+    "_description": "Applied after scraping, before entering the matching pipeline. These map to the hard_dealbreakers in target_profile.json.",
+    "location": "London only. Reject listings outside London unless explicitly marked as fully remote.",
+    "contract_type": "Permanent only. Reject: fixed-term, freelance, contract, commission-only, internship.",
+    "salary": {
+      "minimum": 28000,
+      "action_if_no_salary": "Include but flag. Many listings don't show salary — these should still enter the pipeline.",
+      "action_if_below_minimum": "Reject automatically."
+    },
+    "title_exclusions": ["Marketing Assistant", "Marketing Intern", "Sales Assistant", "Telesales", "Cold Caller", "Receptionist", "Administrator"],
+    "keyword_exclusions": ["commission only", "self-employed", "unpaid", "volunteer", "work experience"]
+  },
+
+  "deduplication": {
+    "method": "Hash the combination of company_name + job_title + location. If a listing with the same hash already exists in the database, skip it.",
+    "cross_board": "The same role often appears on 3-4 boards. Deduplication runs across all boards, not per-board.",
+    "expiry": "Listings older than 30 days are marked as expired and excluded from the active pipeline."
+  },
+
+  "output_schema": {
+    "_description": "Each scraped listing is stored in this format in the SQLite database.",
+    "fields": {
+      "id": "Auto-generated unique ID",
+      "source_board": "linkedin | indeed | reed | totaljobs | glassdoor | google | cwjobs",
+      "source_url": "Original listing URL",
+      "job_title": "Extracted job title",
+      "company_name": "Extracted company name",
+      "location": "Extracted location",
+      "work_setup": "remote | hybrid | office | unknown",
+      "salary_min": "Extracted or null",
+      "salary_max": "Extracted or null",
+      "contract_type": "permanent | contract | unknown",
+      "description_text": "Full job description text",
+      "date_posted": "Extracted or scraped date",
+      "date_scraped": "Timestamp of when we found it",
+      "status": "new | matched | researched | pending_stage_1 | approved_stage_1 | tailored | pending_stage_2 | approved | submitted | skipped_stage_1 | skipped_stage_2 | expired | queued",
+      "match_score": "Calculated by matching engine (0-100)",
+      "dedup_hash": "Hash of company + title + location"
+    }
+  },
+
+  "tooling_recommendation": {
+    "primary": "JobSpy Python library (github.com/speedyapply/JobSpy). Supports LinkedIn, Indeed, Glassdoor, Google Jobs in one API. Open source, actively maintained.",
+    "secondary": "Playwright (Python) for boards not supported by JobSpy (Reed API, Totaljobs, CWJobs).",
+    "proxies": "Residential proxy rotation required for LinkedIn and Google. Indeed and Reed are more permissive. Budget for a proxy service (e.g. Bright Data, ScraperAPI) or use free rotating proxies initially.",
+    "database": "SQLite for initial build. PostgreSQL if scaling to 1000+ listings/day."
+  }
+}
