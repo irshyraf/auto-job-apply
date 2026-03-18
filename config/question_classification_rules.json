@@ -89,12 +89,12 @@
         "answer": "London-based roles only. Open to all work setups — remote, hybrid, or office-based."
       },
       {
-        "keywords": ["full name", "legal name", "first name", "last name", "surname"],
+        "keywords": ["full name", "legal name", "first name", "last name", "surname", "given name", "given_name"],
         "vault_field": "personal.full_name",
         "answer": "Aafreen Fathima"
       },
       {
-        "keywords": ["email address", "email"],
+        "keywords": ["email address", "email", "e-mail", "e mail"],
         "vault_field": "personal.email",
         "answer": "aafreenfathimawork@gmail.com"
       },
@@ -157,6 +157,14 @@
         "answer": "Prefer not to say",
         "answer_variants": ["Prefer not to say", "Prefer not to disclose", "Rather not say"],
         "notes": "Always select 'Prefer not to say' or closest equivalent. If not available and the field is required, select the most neutral option."
+      },
+      {
+        "_rule_id": "equality_ethnicity",
+        "keywords": ["ethnic", "ethnicity", "minority"],
+        "tier": 1,
+        "action": "AUTO_FILL",
+        "answer": "Prefer not to say",
+        "notes": "Catches phrasings like 'ethnic minority group' that the broader equality rule may miss."
       }
     ]
   },

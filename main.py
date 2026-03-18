@@ -276,7 +276,7 @@ def run_tailor_pipeline() -> None:
 
     conn = get_connection()
     count = conn.execute(
-        "SELECT COUNT(*) FROM jobs WHERE status = 'approved_stage_1'"
+        "SELECT COUNT(*) FROM jobs WHERE status IN ('approved_stage_1', 'researched')"
     ).fetchone()[0]
     conn.close()
 

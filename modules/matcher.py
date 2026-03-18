@@ -104,6 +104,7 @@ _DEALBREAKER_PATTERNS = [
     r"\bno\s+base\s+salary\b",
     r"\bOTE\s+only\b",
     r"\bfixed[\s\-]term\b",
+    r"\bFTC\b",
     r"\btemporary\s+contract\b",
     r"\bfrequent\s+cold\s+call",
     r"\b100%\s+outbound\b",

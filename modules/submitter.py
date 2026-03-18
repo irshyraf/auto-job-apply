@@ -355,7 +355,7 @@ async def _prescan_form(url: str) -> dict:
                         continue
 
                     # Determine field type
-                    if input_type == "textarea" or el.evaluate("el => el.tagName.toLowerCase()") == "textarea":
+                    if input_type == "textarea" or await el.evaluate("el => el.tagName.toLowerCase()") == "textarea":
                         field_type = "text_long"
                     else:
                         field_type = "text_short"

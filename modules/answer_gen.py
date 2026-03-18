@@ -574,7 +574,8 @@ def run_answer_gen(
                 call_type=f"tier{answer['tier']}",
                 input_tokens=usage["input_tokens"],
                 output_tokens=usage["output_tokens"],
-                cost_usd=cost
+                cost_usd=cost,
+                conn=conn
             )
 
         tier = answer["tier"]
@@ -635,7 +636,8 @@ def run_answer_gen(
                 call_type="cover_letter",
                 input_tokens=cl_usage["input_tokens"],
                 output_tokens=cl_usage["output_tokens"],
-                cost_usd=cost
+                cost_usd=cost,
+                conn=conn
             )
         stats["cover_letter"] = True
         print(f"  Cover letter generated ({len(cl_text.split())} words)\n")

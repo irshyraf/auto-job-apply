@@ -199,18 +199,27 @@ def calculate_api_cost(
 
 
 def log_api_usage(job_id: int | None, module: str, call_type: str,
-                  input_tokens: int, output_tokens: int, cost_usd: float) -> None:
-    """Insert one row into api_usage_log. Called after every Claude API call."""
+                  input_tokens: int, output_tokens: int, cost_usd: float,
+                  conn=None) -> None:
+    """Insert one row into api_usage_log. Called after every Claude API call.
+
+    If conn is provided (caller already holds an open connection), use it and
+    do NOT close it — the caller owns the connection lifecycle.  If conn is
+    None, open a fresh connection, commit, and close it here.
+    """
     from datetime import datetime, timezone
-    conn = get_connection()
+    _owns_conn = conn is None
+    if _owns_conn:
+        conn = get_connection()
     conn.execute(
         """INSERT INTO api_usage_log (job_id, module, call_type, input_tokens, output_tokens, cost_usd, timestamp)
            VALUES (?, ?, ?, ?, ?, ?, ?)""",
         (job_id, module, call_type, input_tokens, output_tokens, cost_usd,
          datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"))
     )
-    conn.commit()
-    conn.close()
+    if _owns_conn:
+        conn.commit()
+        conn.close()
 
 
 def get_monthly_spend() -> float:
