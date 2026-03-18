@@ -261,13 +261,17 @@ const fs = require('fs');
 # ---------------------------------------------------------------------------
 
 async def _get_field_label(page: Page, element) -> str:
-    """Extract the human-readable label for a form element."""
-    # 1. aria-label attribute
+    """Extract the human-readable label for a form element.
+
+    Returns empty string if no proper label found (rather than guessing
+    from surrounding page text, which can pick up navigation or instructions).
+    """
+    # 1. aria-label attribute (most reliable)
     aria = await element.get_attribute("aria-label") or ""
     if aria.strip():
         return aria.strip()
 
-    # 2. Associated <label> via id/for
+    # 2. Associated <label> via id/for (semantic HTML)
     el_id = await element.get_attribute("id") or ""
     if el_id:
         try:
@@ -279,24 +283,20 @@ async def _get_field_label(page: Page, element) -> str:
         except Exception:
             pass
 
-    # 3. placeholder
+    # 3. placeholder attribute
     placeholder = await element.get_attribute("placeholder") or ""
     if placeholder.strip():
         return placeholder.strip()
 
-    # 4. name attribute
+    # 4. name attribute (last resort for real form fields)
     name = await element.get_attribute("name") or ""
     if name.strip():
         return name.replace("_", " ").replace("-", " ").strip()
 
-    # 5. Surrounding text (parent element text minus child input text)
-    try:
-        parent = await element.evaluate_handle("el => el.closest('div,li,p,fieldset')")
-        parent_text = await page.evaluate("el => el ? el.innerText : ''", parent)
-        if parent_text.strip():
-            return parent_text.strip()[:80]
-    except Exception:
-        pass
+    # 5. REMOVED: parent element text fallback
+    # This was picking up navigation, instructions, and other page text.
+    # If a field has no proper label (aria-label, label element, placeholder,
+    # or name attribute), it's likely not a real form field. Skip it.
 
     return ""
 
