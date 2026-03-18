@@ -74,6 +74,7 @@ def _badge(status: str) -> str:
 # Data helpers
 # ---------------------------------------------------------------------------
 
+@st.cache_data(ttl=30)
 def _get_metrics() -> dict:
     conn = get_connection()
     from datetime import datetime, timedelta
@@ -110,6 +111,7 @@ def _get_metrics() -> dict:
     }
 
 
+@st.cache_data(ttl=30)
 def _get_recent_jobs(limit: int = 10) -> list:
     conn = get_connection()
     rows = conn.execute("""
@@ -193,7 +195,7 @@ def render() -> None:
 
     with c1:
         st.markdown(f"""
-            <div class="metric-card">
+            <div class="metric-card" role="region" aria-label="Awaiting review: {metrics['awaiting']} jobs">
                 <div class="metric-label">Awaiting review</div>
                 <div class="metric-value {awaiting_colour}">{metrics['awaiting']}</div>
             </div>
@@ -201,7 +203,7 @@ def render() -> None:
 
     with c2:
         st.markdown(f"""
-            <div class="metric-card">
+            <div class="metric-card" role="region" aria-label="Submitted this week: {metrics['this_week']} jobs">
                 <div class="metric-label">Submitted this week</div>
                 <div class="metric-value metric-green">{metrics['this_week']}</div>
             </div>
@@ -209,7 +211,7 @@ def render() -> None:
 
     with c3:
         st.markdown(f"""
-            <div class="metric-card">
+            <div class="metric-card" role="region" aria-label="Total applied: {metrics['total']} jobs">
                 <div class="metric-label">Total applied</div>
                 <div class="metric-value metric-grey">{metrics['total']}</div>
             </div>
@@ -217,7 +219,7 @@ def render() -> None:
 
     with c4:
         st.markdown(f"""
-            <div class="metric-card">
+            <div class="metric-card" role="region" aria-label="API spend this month: ${spend:.2f}">
                 <div class="metric-label">API spend this month</div>
                 <div class="metric-value {spend_colour}">${spend:.2f}</div>
             </div>

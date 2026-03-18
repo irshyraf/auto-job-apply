@@ -62,6 +62,7 @@ def _auto_update_no_response() -> None:
         pass
 
 
+@st.cache_data(ttl=30)
 def _load_jobs(status_filter: list | None = None, search: str = "") -> list:
     conn = get_connection()
     query = """
@@ -92,6 +93,7 @@ def _load_jobs(status_filter: list | None = None, search: str = "") -> list:
     return [dict(r) for r in rows]
 
 
+@st.cache_data(ttl=30)
 def _load_answers(job_id: int) -> list:
     conn = get_connection()
     rows = conn.execute("""
@@ -149,6 +151,7 @@ def _jobs_to_csv(jobs: list) -> str:
     return buf.getvalue()
 
 
+@st.cache_data(ttl=30)
 def _count_by_tab(search: str = "") -> dict:
     conn = get_connection()
     if search:
@@ -213,10 +216,11 @@ def render() -> None:
             )
 
             # Table header
+            st.markdown('<div role="table" aria-label="Application history">', unsafe_allow_html=True)
             cols = st.columns([3, 2.5, 1.5, 1.5, 1.5, 2])
             headers = ["Role", "Company", "Salary", "CV Variant", "Date", "Status"]
             for col, h in zip(cols, headers):
-                col.markdown(f"**{h}**")
+                col.markdown(f'<div role="columnheader" scope="col"><strong>{h}</strong></div>', unsafe_allow_html=True)
             st.markdown("---")
 
             for job in jobs:
@@ -275,3 +279,5 @@ def render() -> None:
                             _update_status(job_id, new_status)
                             st.toast(f"Status updated to '{new_status}'.", icon="✅")
                             st.rerun()
+
+            st.markdown('</div>', unsafe_allow_html=True)

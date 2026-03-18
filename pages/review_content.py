@@ -53,6 +53,7 @@ CARD_CSS = """
 # Data helpers
 # ---------------------------------------------------------------------------
 
+@st.cache_data(ttl=30)
 def _load_stage2_jobs() -> list:
     conn = get_connection()
     rows = conn.execute("""
@@ -66,6 +67,7 @@ def _load_stage2_jobs() -> list:
     return [dict(r) for r in rows]
 
 
+@st.cache_data(ttl=30)
 def _load_answers(job_id: int) -> list:
     conn = get_connection()
     rows = conn.execute("""
@@ -221,10 +223,10 @@ def render() -> None:
 
             # Tailored profile
             if profile:
-                st.markdown(f'<div class="profile-box">{profile}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="profile-box" role="region" aria-label="Tailored profile for {job["job_title"]}">{profile}</div>', unsafe_allow_html=True)
 
             # Answers
-            st.markdown("**Application answers**")
+            st.markdown('<div role="region" aria-label="Application answers"><strong>Application answers</strong></div>', unsafe_allow_html=True)
             for ans in answers:
                 field = ans["field_name"]
                 if field == "cover_letter":

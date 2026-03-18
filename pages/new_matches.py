@@ -43,6 +43,7 @@ CARD_CSS = """
 # Data helpers
 # ---------------------------------------------------------------------------
 
+@st.cache_data(ttl=30)
 def _load_stage1_jobs(sort_by: str = "match_score") -> list:
     conn = get_connection()
     order = {
@@ -215,7 +216,7 @@ def render() -> None:
 
         with st.container():
             st.markdown(f"""
-                <div class="match-card">
+                <div class="match-card" role="article" aria-label="Job match: {job['job_title']} at {job['company_name']}, {score_pct}% match">
                     <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                         <div>
                             <div class="job-title">{job['job_title']}</div>
@@ -223,7 +224,7 @@ def render() -> None:
                                 {job['company_name']} · {job.get('location','London')} · {setup.title()} · {salary}
                             </div>
                         </div>
-                        <div class="score-badge">{score_pct}%</div>
+                        <div class="score-badge" aria-hidden="false">{score_pct}%</div>
                     </div>
                     <div class="jd-summary">{summary}</div>
                 </div>

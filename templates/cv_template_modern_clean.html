@@ -219,16 +219,21 @@
 </head>
 <body>
 
+<main role="main">
+
 <!-- ═══════ HEADER ═══════ -->
-<div class="header">
+<header class="header">
   <div class="header__name">{{FULL_NAME}}</div>
   <div class="header__contact">{{CONTACT_LINE}}</div>
-</div>
+</header>
 
 <!-- ═══════ PROFILE ═══════ -->
-<div class="profile">{{PROFILE_TEXT}}</div>
+<section aria-label="Professional summary">
+  <div class="profile">{{PROFILE_TEXT}}</div>
+</section>
 
 <!-- ═══════ EDUCATION ═══════ -->
+<section aria-label="Education">
 <div class="section-title">Education</div>
 <hr class="section-line">
 
@@ -242,13 +247,15 @@
   {{#EDU_DETAIL}}<div class="edu-detail">{{EDU_DETAIL}}</div>{{/EDU_DETAIL}}
 </div>
 {{/EDUCATION}}
+</section>
 
 <!-- ═══════ EXPERIENCE ═══════ -->
+<section aria-label="Work experience">
 <div class="section-title">Experience</div>
 <hr class="section-line">
 
 {{#ROLES}}
-<div class="role">
+<article class="role">
   <div class="role__header">
     <div class="role__company">{{ROLE_COMPANY}}</div>
     <div class="role__dates">{{ROLE_DATES}}</div>
@@ -259,11 +266,13 @@
     <li>{{BULLET}}</li>
     {{/ROLE_BULLETS}}
   </ul>
-</div>
+</article>
 {{/ROLES}}
+</section>
 
 <!-- ═══════ EXTRA-CURRICULAR ═══════ -->
 {{#HAS_EXTRAS}}
+<section aria-label="Leadership and extra-curricular activities">
 <div class="section-title">Leadership &amp; Extra-Curricular</div>
 <hr class="section-line">
 <ul class="extras" style="list-style:none;padding:0;">
@@ -271,14 +280,19 @@
   <li>{{EXTRA}}</li>
   {{/EXTRAS}}
 </ul>
+</section>
 {{/HAS_EXTRAS}}
 
 <!-- ═══════ SKILLS ═══════ -->
+<section aria-label="Skills">
 <div class="section-title">Skills</div>
 <hr class="section-line">
 <div class="skills-block">
   {{SKILLS_HTML}}
 </div>
+</section>
+
+</main>
 
 </body>
 </html>

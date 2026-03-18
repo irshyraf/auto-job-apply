@@ -31,6 +31,20 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------------------------
+# Accessibility: Add language attribute and skip-nav link
+# ---------------------------------------------------------------------------
+
+st.markdown(
+    '<html lang="en">',
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    '<a href="#main-content" style="position: absolute; top: -40px; left: 0; background: #000; color: #fff; padding: 8px; text-decoration: none; z-index: 100;" tabindex="0">Skip to main content</a>',
+    unsafe_allow_html=True,
+)
+
+# ---------------------------------------------------------------------------
 # Load badge counts for sidebar (pending_stage_1 and pending_stage_2)
 # ---------------------------------------------------------------------------
 
