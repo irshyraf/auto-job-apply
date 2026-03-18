@@ -84,6 +84,16 @@ EXCLUDED_DESCRIPTION_KEYWORDS = [
     "work experience",
 ]
 
+# Positive title keywords — job titles must contain at least one for job to be relevant
+RELEVANT_TITLE_KEYWORDS = [
+    "business development", "account executive", "account manager",
+    "account coordinator", "new business", "partnerships", "client development",
+    "commercial", "client services", "campaign", "demand generation",
+    "digital marketing", "marketing coordinator", "marketing executive",
+    "brand", "crm", "email marketing", "growth", "revenue", "sales",
+    "content", "community",
+]
+
 SALARY_MINIMUM = 28_000  # GBP
 
 
@@ -195,6 +205,12 @@ def _title_excluded(title: str) -> bool:
     return any(frag in t for frag in EXCLUDED_TITLE_FRAGMENTS)
 
 
+def _title_relevant(title: str) -> bool:
+    """Return True if the job title contains at least one relevant keyword."""
+    t = title.lower()
+    return any(kw in t for kw in RELEVANT_TITLE_KEYWORDS)
+
+
 def _description_excluded(description: str) -> bool:
     d = (description or "").lower()
     return any(kw in d for kw in EXCLUDED_DESCRIPTION_KEYWORDS)
@@ -304,6 +320,9 @@ def _scrape_via_jobspy(
         if _contract_type_excluded(job_type_raw):
             filtered_count += 1
             continue
+        if not _title_relevant(title):
+            filtered_count += 1
+            continue
         if salary_min is not None and salary_min < SALARY_MINIMUM:
             filtered_count += 1
             continue
@@ -383,6 +402,9 @@ def _scrape_reed(query: str, results_wanted: int = 50) -> tuple[list[dict], int,
             filtered_count += 1
             continue
         if _description_excluded(description):
+            filtered_count += 1
+            continue
+        if not _title_relevant(title):
             filtered_count += 1
             continue
 

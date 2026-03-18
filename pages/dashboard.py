@@ -181,6 +181,7 @@ def render() -> None:
             with st.spinner("Scraping jobs and matching…"):
                 from main import run_scrape_and_match
                 result = run_scrape_and_match()
+            st.cache_data.clear()
             st.toast(f"Found {result['new_matches']} new match(es)", icon="✅")
             st.session_state["page"] = "new_matches"
             st.rerun()
